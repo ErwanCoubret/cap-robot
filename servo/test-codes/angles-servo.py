@@ -4,6 +4,8 @@ import lgpio
 GPIO_PIN = 18 # 6e pin en haut à partir de la gauche 
 CHIP = 4 # Correspond à /dev/gpiochip4 sur le Pi 5 (GPIOs 0-27)
 
+ANGLE = 0.5 # Entre -1 (gauche) et 1 (droite)
+
 h = None
 try:
     h = lgpio.gpiochip_open(CHIP)
@@ -27,7 +29,8 @@ try:
         lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
 
     # On initialise au milieu
-    set_pos(0.5)
+    set_pos(ANGLE)
+    print("Position initiale :", ANGLE)
     
 except KeyboardInterrupt:
     print("\nArrêt demandé par l'utilisateur.")
