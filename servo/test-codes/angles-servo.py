@@ -18,22 +18,21 @@ try:
     print("--- Mode LGPIO Direct (Pi 5) : CONNECTÉ ---")
 
     def set_pos(p):
-        # p théoriquement entre -1 (gauche) et 1 (droite)
-        width = 1500 + (p * 500)
-        
-        if width < 400 or width > 2600:
-            print("Valeur extrême ignorée pour protéger le matériel.")
-            return
+      # p ranges from -1.8 (left) to 0 (right)
+      width = 1500 + (p * 500)
+      
+      if p < -1.8 or p > 0:
+        print("Value out of range [-1.8, 0]. Rejected to protect the hardware.")
+        return
 
-        # 1. On envoie le signal pour faire bouger le servo
-        lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
-        
-        # 2. On attend une demi-seconde pour lui laisser le temps physiquement d'arriver à destination
-        # (Si vous faites de grands mouvements, vous pouvez augmenter à 0.8 ou 1.0)
-        time.sleep(0.5) 
-        
-        # 3. ON COUPE LE SIGNAL POUR TUER LE JITTER
-        lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
+      # 1. Send PWM signal to move the servo
+      lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
+      
+      # 2. Wait for the servo to physically reach its destination
+      time.sleep(0.5) 
+      
+      # 3. Cut the signal to prevent jitter
+      lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
 
     # On initialise au milieu
     set_pos(0)
