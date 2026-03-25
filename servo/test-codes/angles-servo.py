@@ -21,13 +21,19 @@ try:
         # p théoriquement entre -1 (gauche) et 1 (droite)
         width = 1500 + (p * 500)
         
-        # Sécurité basique pour éviter d'envoyer un PWM totalement hors norme au Pi
-        # (Un servo standard supporte environ de 500us à 2500us maximum)
         if width < 400 or width > 2600:
             print("Valeur extrême ignorée pour protéger le matériel.")
             return
 
+        # 1. On envoie le signal pour faire bouger le servo
         lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
+        
+        # 2. On attend une demi-seconde pour lui laisser le temps physiquement d'arriver à destination
+        # (Si vous faites de grands mouvements, vous pouvez augmenter à 0.8 ou 1.0)
+        time.sleep(0.5) 
+        
+        # 3. ON COUPE LE SIGNAL POUR TUER LE JITTER
+        lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
 
     # On initialise au milieu
     set_pos(0)
