@@ -27,7 +27,7 @@ try:
         lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
 
     # On initialise au milieu
-    set_pos(0)
+    set_pos(0.5)
     
 except KeyboardInterrupt:
     print("\nArrêt demandé par l'utilisateur.")
