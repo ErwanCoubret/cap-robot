@@ -3,7 +3,7 @@ import time
 
 # CONFIGURATION PI 5
 GPIO_PIN = 18 # 6e pin en haut à partir de la gauche 
-CHIP = 4 
+CHIP = 4 # Correspond à /dev/gpiochip4 sur le Pi 5 (GPIOs 0-27)
 
 def run_servo_smooth():
     h = None
