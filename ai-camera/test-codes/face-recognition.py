@@ -7,8 +7,12 @@ MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_mo
 print("Chargement du modèle dans la caméra (cela peut prendre quelques secondes la 1ère fois)...")
 imx500 = IMX500(MODEL_PATH)
 
+# Initialisation de Picamera2
+picam2 = Picamera2(imx500.camera_num)
+
 # ✨ L'ASTUCE EST ICI :
 # Récupérer la taille d'entrée exacte exigée par le modèle IA
+# On récupère toujours la taille attendue par le modèle (généralement 640x640)
 model_h, model_w = imx500.get_input_size()
 
 # 1. Le flux principal : Résolution classique (ex: 720p), on laisse le format par défaut (YUV420, beaucoup plus léger)
@@ -18,19 +22,6 @@ main_config = {"size": (1280, 720)}
 lores_config = {"size": (model_w, model_h), "format": "RGB888"}
 
 # On assemble la configuration
-config = picam2.create_preview_configuration(
-    main=main_config, 
-    lores=lores_config, 
-    controls={"FrameRate": 30}
-)
-picam2.configure(config)
-
-# ✨ NOUVEAU : Configurer explicitement les flux
-# 'main' est ton flux d'image classique, 'lores' est le flux dédié au NPU
-main_config = {"size": (640, 640), "format": "RGB888"}
-lores_config = {"size": (model_w, model_h), "format": "RGB888"}
-
-# On injecte les deux configurations + le framerate
 config = picam2.create_preview_configuration(
     main=main_config, 
     lores=lores_config, 
