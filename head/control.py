@@ -96,47 +96,55 @@ try:
     with device as stream:
         for frame in stream:
             valid_detections = frame.detections[frame.detections.confidence > 0.55]
-            
             if len(valid_detections) > 0:
-                
                 for bbox, score, class_id, _ in valid_detections:
                     x_min, y_min, x_max, y_max = bbox
                     
-                    # 1. RÉCUPÉRATION DES COORDONNÉES NORMALISÉES (0.0 à 1.0)
+                    # 1. RÉCUPÉRATION DES COORDONNÉES NORMALISÉES
                     cx_norm = (x_min + x_max) / 2
                     cy_norm = (y_min + y_max) / 2
                     
-                    # 2. CONVERSION EN PIXELS RÉELS (0 à 640 / 0 à 480)
+                    # 🔄 EFFET MIROIR (FLIP GAUCHE/DROITE)
+                    # Si 0.9 devient 0.1, on inverse complètement l'axe horizontal !
+                    cx_norm = 1.0 - cx_norm
+                    
+                    # 2. CONVERSION EN PIXELS RÉELS
                     cx = cx_norm * CAM_WIDTH
                     cy = cy_norm * CAM_HEIGHT
                     
                     # -----------------------------------------------------
-                    # A. ENVOI À L'ARDUINO (Mouvement des yeux)
+                    # A. ENVOI À L'ARDUINO (Les yeux suivent en continu)
                     # -----------------------------------------------------
                     if arduino and arduino.is_open:
-                        # Plus besoin de diviser par CAM_WIDTH ici, un simple produit en croix suffit !
                         target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
                         target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
-                        
                         trame = f"{target_x} {target_y}\n"
                         arduino.write(trame.encode('utf-8'))
                     
                     # -----------------------------------------------------
-                    # B. CONTRÔLE DU SERVO (Suivi de la tête) AVEC ANTI-JITTER
+                    # B. CONTRÔLE DU SERVO (Zones mortes + Travelling)
                     # -----------------------------------------------------
-                    erreur_x = (CAM_WIDTH / 2) - cx 
+                    # Vitesse du travelling (à ajuster. Plus c'est petit, plus c'est fluide/lent)
+                    SERVO_STEP = 0.03  
                     
-                    # ZONE MORTE (Deadband) : On ignore les micro-mouvements de moins de 30 pixels
-                    # Cela va stopper net les tremblements (jitter) !
-                    if abs(erreur_x) > 30:
-                        current_servo_pos -= erreur_x * KP
-                        # Sécurité des butées
-                        current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
-                        update_servo(current_servo_pos)
+                    if cx_norm < 0.30:
+                        # Le visage est dans la zone 0-30% (à gauche)
+                        # Le servo tourne doucement d'un pas vers la gauche
+                        current_servo_pos -= SERVO_STEP
+                        
+                    elif cx_norm > 0.70:
+                        # Le visage est dans la zone 70-100% (à droite)
+                        # Le servo tourne doucement d'un pas vers la droite
+                        current_servo_pos += SERVO_STEP
+                        
+                    # Si on est entre 0.30 et 0.70, le `if` est ignoré, le servo ne bouge pas !
+
+                    # Sécurité des butées du moteur [-1.8 à 0.0]
+                    current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
+                    update_servo(current_servo_pos)
                     
-                    print(f"🎯 Pixels-> X:{cx:.1f} Y:{cy:.1f} | ⚙️ Servo:{current_servo_pos:.2f} | Conf: {score*100:.1f}%")
+                    print(f"🎯 Zone: {cx_norm*100:.0f}% de l'écran | ⚙️ Servo: {current_servo_pos:.2f}")
                     
-                    # On break pour ne traiter que le premier visage
                     break
                 
 except KeyboardInterrupt:
