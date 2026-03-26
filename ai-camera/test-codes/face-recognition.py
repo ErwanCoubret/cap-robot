@@ -1,50 +1,51 @@
 import time
 from picamera2 import Picamera2
 from picamera2.devices.imx500 import IMX500
-
-# On importe le décodeur pour transformer les Tenseurs en Objets
-from picamera2.devices.imx500.yolov8 import Yolov8PostProcessor
+# On utilise le nom exact trouvé avec ta commande dir()
+from picamera2.devices.imx500 import postprocess_yolov8
 
 MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
 
-print("Chargement du modèle et du décodeur...")
+print("Chargement du modèle IMX500...")
 imx500 = IMX500(MODEL_PATH)
-
-# ✨ NOUVEAU : On crée le traducteur pour YOLOv8
-# On lui donne les infos du modèle pour qu'il sache comment interpréter les chiffres
-post_processor = Yolov8PostProcessor(imx500.get_input_size())
+# On récupère la taille d'entrée (ex: 640, 640) pour le décodeur
+model_size = imx500.get_input_size()
 
 picam2 = Picamera2(imx500.camera_num)
 config = picam2.create_video_configuration(main={"size": (640, 480), "format": "YUV420"})
 picam2.configure(config)
 picam2.start()
 
-print("Analyse en cours... (Place ton visage devant la caméra !)")
+print(f"🎯 IA prête ! Taille modèle : {model_size}. Cherchons des visages...")
 
 try:
     while True:
         metadata = picam2.capture_metadata()
-        
-        # ✨ L'ASTUCE : On traduit le Tenseur brut en liste de détections
-        # On cherche 'CnnOutputTensor' dans les métadonnées pour le transformer
         raw_tensor = metadata.get('CnnOutputTensor')
+        
         if raw_tensor is not None:
-            # Le post-processeur crée la liste 'ObjectDetect' à la volée
-            detections = post_processor.process(raw_tensor)
+            # ✨ LA MAGIE : On appelle la fonction directe
+            # Elle nous renvoie une liste d'objets avec .box et .conf
+            detections = postprocess_yolov8(raw_tensor, model_size=model_size, conf_threshold=0.4)
             
-            # Maintenant, ton filtre habituel va fonctionner !
-            cibles = [d for d in detections if d.conf > 0.40]
-            
-            if cibles:
-                cible = max(cibles, key=lambda d: d.box.width * d.box.height)
+            if detections:
+                # On prend la plus grosse détection (le visage le plus proche)
+                cible = max(detections, key=lambda d: d.box.width * d.box.height)
+                
+                # Coordonnées (0.0 à 1.0)
                 cx = cible.box.x + (cible.box.width / 2)
                 cy = cible.box.y + (cible.box.height / 2)
-                print(f"🎯 VISAGE DÉTECTÉ ! Centre: {cx:.2f}, {cy:.2f} | Confiance: {cible.conf*100:.1f}%")
+                
+                print(f"🎯 VISAGE TROUVÉ ! X: {cx:.3f} Y: {cy:.3f} | Confiance: {cible.conf*100:.1f}%")
+            else:
+                # Optionnel : décommenter pour voir quand l'IA bosse mais ne voit rien
+                # print("... scan en cours ...")
+                pass
         
         time.sleep(0.01)
 
 except KeyboardInterrupt:
-    print("\nArrêt.")
+    print("\nArrêt du robot.")
 finally:
     picam2.stop()
     picam2.close()
