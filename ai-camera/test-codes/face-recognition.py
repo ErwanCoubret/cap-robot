@@ -1,11 +1,11 @@
 import time
+import numpy as np
 from picamera2 import Picamera2
-from picamera2.devices.imx500 import IMX500
-from picamera2.devices.imx500 import postprocess_yolov8_detection
+from picamera2.devices.imx500 import IMX500, postprocess_yolov8_detection
 
 MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
 
-print("Chargement du modèle IMX500...")
+print("Chargement IMX500...")
 imx500 = IMX500(MODEL_PATH)
 
 picam2 = Picamera2(imx500.camera_num)
@@ -13,26 +13,36 @@ config = picam2.create_video_configuration(main={"size": (640, 480), "format": "
 picam2.configure(config)
 picam2.start()
 
-print("🎯 Tentative finale... Montre-moi ton visage !")
+print("🎯 C'est parti ! Analyse des Arrays Numpy en cours...")
 
 try:
     while True:
         metadata = picam2.capture_metadata()
         raw_tensor = metadata.get('CnnOutputTensor')
         
-        if raw_tensor is not None:
-            # On utilise 'threshold' qui est le standard le plus courant
-            detections = postprocess_yolov8_detection(raw_tensor, threshold=0.4)
+        # raw_tensor doit être un Tuple de 2 arrays (le 'outputs' attendu)
+        if raw_tensor is not None and isinstance(raw_tensor, tuple):
             
-            if detections and len(detections) > 0:
-                # On prend la détection avec la meilleure confiance
-                cible = max(detections, key=lambda d: d.conf)
+            # On utilise le nom exact : 'conf'
+            # La fonction renvoie : (boxes, scores, ids)
+            boxes, scores, ids = postprocess_yolov8_detection(raw_tensor, conf=0.4)
+            
+            # Si on a des détections (scores n'est pas vide)
+            if scores is not None and len(scores) > 0:
+                # On trouve l'indice du meilleur score
+                i = np.argmax(scores)
                 
-                # Coordonnées du centre
-                cx = cible.box.x + (cible.box.width / 2)
-                cy = cible.box.y + (cible.box.height / 2)
+                # Les coordonnées YOLO sont souvent [x1, y1, x2, y2]
+                # ou [x_center, y_center, w, h] selon le firmware.
+                # Testons le format standard [x1, y1, x2, y2] :
+                box = boxes[i]
+                x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
                 
-                print(f"🎯 VISAGE DÉTECTÉ ! X: {cx:.3f} Y: {cy:.3f} | Confiance: {cible.conf*100:.1f}%")
+                # Calcul du centre
+                cx = (x1 + x2) / 2
+                cy = (y1 + y2) / 2
+                
+                print(f"🎯 VISAGE ! X: {cx:.3f} Y: {cy:.3f} | Confiance: {scores[i]*100:.1f}%")
         
         time.sleep(0.01)
 
