@@ -3,7 +3,7 @@ from picamera2 import Picamera2
 from picamera2.devices.imx500 import IMX500
 from picamera2.devices.imx500 import postprocess_yolov8_detection
 
-MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
+MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face.rpk/network.rpk"
 
 print("Chargement du modèle IMX500...")
 imx500 = IMX500(MODEL_PATH)
@@ -13,7 +13,7 @@ config = picam2.create_video_configuration(main={"size": (640, 480), "format": "
 picam2.configure(config)
 picam2.start()
 
-print("🎯 C'est la bonne ! Scan de visages en cours...")
+print("🎯 Tentative finale... Montre-moi ton visage !")
 
 try:
     while True:
@@ -21,14 +21,14 @@ try:
         raw_tensor = metadata.get('CnnOutputTensor')
         
         if raw_tensor is not None:
-            # ✨ APPEL SIMPLIFIÉ ICI
-            detections = postprocess_yolov8_detection(raw_tensor, conf_threshold=0.4)
+            # On utilise 'threshold' qui est le standard le plus courant
+            detections = postprocess_yolov8_detection(raw_tensor, threshold=0.4)
             
-            if detections:
-                # On prend le visage le plus large (le plus proche)
-                cible = max(detections, key=lambda d: d.box.width * d.box.height)
+            if detections and len(detections) > 0:
+                # On prend la détection avec la meilleure confiance
+                cible = max(detections, key=lambda d: d.conf)
                 
-                # Calcul du centre (cx, cy entre 0.0 et 1.0)
+                # Coordonnées du centre
                 cx = cible.box.x + (cible.box.width / 2)
                 cy = cible.box.y + (cible.box.height / 2)
                 
