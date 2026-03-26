@@ -34,10 +34,17 @@ current_servo_pos = -1  # Position initiale
 
 def update_servo(p):
     """Envoie le signal PWM sans bloquer (pas de sleep, pas de coupure)"""
+    # 🛠️ CORRECTION : On force la conversion en Float Python standard
+    p = float(p) 
+    
     if p < -1.8 or p > 0:
         return # Sécurité matérielle respectée
+        
     width = 1500 + (p * 500)
-    lgpio.tx_pwm(h, GPIO_PIN, 50, (width / 20000.0) * 100.0)
+    
+    duty_cycle = float((width / 20000.0) * 100.0)
+    
+    lgpio.tx_pwm(h, GPIO_PIN, 50, duty_cycle)
 
 # ==========================================
 # 3. CONFIGURATION IA (Modlib)
