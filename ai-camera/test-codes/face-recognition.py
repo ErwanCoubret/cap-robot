@@ -5,7 +5,7 @@ from picamera2.devices.imx500 import IMX500
 # 1. Chargement du modèle IA dans le capteur IMX500
 # NOTE : Remplace ce chemin par ton modèle de détection de visage spécifique si tu en as compilé un.
 # Par défaut, on utilise un modèle standard pré-installé qui détecte les personnes (classe 0).
-MODEL_PATH = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
+MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk"
 
 print("Chargement du modèle dans la caméra (cela peut prendre quelques secondes la 1ère fois)...")
 imx500 = IMX500(MODEL_PATH)
