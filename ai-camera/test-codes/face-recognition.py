@@ -16,12 +16,10 @@ picam2 = Picamera2(imx500.camera_num)
 model_h, model_w = imx500.get_input_size()
 
 # 1. Le flux principal : Résolution classique (ex: 720p), on laisse le format par défaut (YUV420, beaucoup plus léger)
-main_config = {"size": (1280, 720)}
-
-# 2. Le flux IA (lores) : Taille exacte du modèle et format RGB888 exigé par le NPU
+main_config = {"size": (1280, 720), "format": "YUV420"}
+# 2. Le flux secondaire "lores" : Résolution exigée par le modèle IA (ex: 640x640), format RGB888 pour l'IA
 lores_config = {"size": (model_w, model_h), "format": "RGB888"}
 
-# On assemble la configuration
 config = picam2.create_preview_configuration(
     main=main_config, 
     lores=lores_config, 
@@ -35,6 +33,8 @@ print("Caméra IA démarrée ! Analyse en cours... (Ctrl+C pour quitter)")
 try:
     while True:
         metadata = picam2.capture_metadata()
+        
+        print(metadata.keys())
         
         # Le reste de ton code...
         detections = metadata.get('ObjectDetect', []) 
