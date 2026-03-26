@@ -94,7 +94,7 @@ update_servo(current_servo_pos) # On centre le moteur au démarrage
 
 last_servo_move_time = time.time()
 pwm_active = False
-last_sent_pos = -999  # Valeur impossible pour forcer le 1er envoi
+last_sent_pos = -999.0  
 
 try:
     with device as stream:
@@ -102,9 +102,11 @@ try:
             valid_detections = frame.detections[frame.detections.confidence > 0.55]
             
             # ==========================================
-            # 1. GESTION DU VISAGE (S'il y en a un)
+            # 1. GESTION DU VISAGE
             # ==========================================
             if len(valid_detections) > 0:
+                
+                # Ta boucle magique
                 for bbox, score, class_id, _ in valid_detections:
                     x_min, y_min, x_max, y_max = bbox
                     
@@ -119,11 +121,11 @@ try:
                     if arduino and arduino.is_open:
                         target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
                         target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
-                        trame = f"{target_x} {target_y}\n"
-                        arduino.write(trame.encode('utf-8'))
+                        arduino.write(f"{target_x} {target_y}\n".encode('utf-8'))
                     
-                    # --- B. TRAVELLING MOTEUR ---
-                    SERVO_STEP = 0.03  
+                    # --- B. TRAVELLING MOTEUR (BEAUCOUP PLUS RAPIDE) ---
+                    # 🔥 Vitesse multipliée par 4 (Tu peux monter à 0.15 si c'est encore trop lent)
+                    SERVO_STEP = 0.12  
                     new_pos = current_servo_pos
                     
                     if cx_norm < 0.30:
@@ -131,7 +133,9 @@ try:
                     elif cx_norm > 0.70:
                         new_pos += SERVO_STEP
                         
-                    new_pos = max(-1.8, min(0.0, new_pos))
+                    # 🛡️ ANTI-JITTER MATHÉMATIQUE : On arrondit à 2 décimales 
+                    # pour ignorer les micro-variations invisibles du type -1.4533 vs -1.4534
+                    new_pos = round(max(-1.8, min(0.0, new_pos)), 2)
                     
                     # On n'envoie le signal QUE si la position a vraiment changé
                     if new_pos != last_sent_pos:
@@ -139,21 +143,27 @@ try:
                         update_servo(current_servo_pos)
                         
                         last_sent_pos = current_servo_pos
-                        last_servo_move_time = time.time() # On relance le chrono !
+                        last_servo_move_time = time.time() # On relance le chrono
                         pwm_active = True
                         
                         print(f"🎯 Zone: {cx_norm*100:.0f}% | ⚙️ Servo: {current_servo_pos:.2f}")
                         
-                    break # On ne traite qu'un seul visage
+                    break # On traite un seul visage par frame
             
             # ==========================================
-            # 2. ANTI-JITTER (Vérification à chaque image)
+            # 2. ANTI-JITTER MATÉRIEL (La méthode forte)
             # ==========================================
-            # Si le signal est actif MAIS qu'on n'a pas bougé depuis 0.3s -> On coupe le jus !
+            # Si le signal est actif MAIS qu'on n'a pas bougé depuis 0.3s -> Coupe-circuit !
             if pwm_active and (time.time() - last_servo_move_time > 0.3):
+                
+                # 1. On coupe la fréquence
                 lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
+                
+                # 2. ⚡ On force la broche électriquement à 0 Volt (LOW)
+                lgpio.gpio_write(h, GPIO_PIN, 0)
+                
                 pwm_active = False
-                print("💤 Servo au repos (Signal coupé, fin des tremblements)")
+                print("💤 Broche 18 forcée à LOW (Moteur totalement coupé)")
 
 except KeyboardInterrupt:
     print("\n🛑 Arrêt demandé par l'utilisateur.")
