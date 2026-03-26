@@ -3,7 +3,7 @@ from picamera2 import Picamera2
 from picamera2.devices.imx500 import IMX500
 
 # On importe le décodeur pour transformer les Tenseurs en Objets
-from picamera2.devices.imx500 import Yolov8PostProcessor
+from picamera2.devices.imx500.yolov8 import Yolov8PostProcessor
 
 MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
 
