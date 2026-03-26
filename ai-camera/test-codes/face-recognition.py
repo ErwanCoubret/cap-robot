@@ -11,8 +11,19 @@ imx500 = IMX500(MODEL_PATH)
 # Récupérer la taille d'entrée exacte exigée par le modèle IA
 model_h, model_w = imx500.get_input_size()
 
-# Initialisation de Picamera2
-picam2 = Picamera2(imx500.camera_num)
+# 1. Le flux principal : Résolution classique (ex: 720p), on laisse le format par défaut (YUV420, beaucoup plus léger)
+main_config = {"size": (1280, 720)}
+
+# 2. Le flux IA (lores) : Taille exacte du modèle et format RGB888 exigé par le NPU
+lores_config = {"size": (model_w, model_h), "format": "RGB888"}
+
+# On assemble la configuration
+config = picam2.create_preview_configuration(
+    main=main_config, 
+    lores=lores_config, 
+    controls={"FrameRate": 30}
+)
+picam2.configure(config)
 
 # ✨ NOUVEAU : Configurer explicitement les flux
 # 'main' est ton flux d'image classique, 'lores' est le flux dédié au NPU
