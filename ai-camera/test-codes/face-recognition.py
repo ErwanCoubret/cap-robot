@@ -3,7 +3,7 @@ from picamera2 import Picamera2
 from picamera2.devices.imx500 import IMX500
 from picamera2.devices.imx500 import postprocess_yolov8_detection
 
-MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face.rpk/network.rpk"
+MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
 
 print("Chargement du modèle IMX500...")
 imx500 = IMX500(MODEL_PATH)
