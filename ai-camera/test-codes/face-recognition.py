@@ -20,30 +20,20 @@ try:
         metadata = picam2.capture_metadata()
         raw_tensor = metadata.get('CnnOutputTensor')
         
-        # raw_tensor doit être un Tuple de 2 arrays (le 'outputs' attendu)
         if raw_tensor is not None:
-            # ✨ L'ASTUCE : On ne garde que les 2 premiers tenseurs
-            # pour éviter le crash "too many values to unpack"
-            tensors_to_process = raw_tensor[:2] if isinstance(raw_tensor, tuple) else raw_tensor
+            print("--- ANALYSE DU TENSEUR ---")
+            print(f"Type global: {type(raw_tensor)}")
+            if isinstance(raw_tensor, (tuple, list)):
+                print(f"Nombre d'éléments: {len(raw_tensor)}")
+                for i, t in enumerate(raw_tensor):
+                    if hasattr(t, 'shape'):
+                        print(f"  [{i}] Array Shape: {t.shape} | Type: {t.dtype}")
+                    else:
+                        print(f"  [{i}] Élément sans shape: {t} (Type: {type(t)})")
             
-            try:
-                # On appelle la fonction avec nos 2 tenseurs filtrés
-                boxes, scores, ids = postprocess_yolov8_detection(tensors_to_process, conf=0.4)
-                
-                if scores is not None and len(scores) > 0:
-                    i = np.argmax(scores)
-                    box = boxes[i]
-                    
-                    # YOLOv8 format : [x1, y1, x2, y2] ou [cx, cy, w, h]
-                    # On calcule le centre de la boîte
-                    cx = (box[0] + box[2]) / 2
-                    cy = (box[1] + box[3]) / 2
-                    
-                    print(f"🎯 VISAGE ! X: {cx:.3f} Y: {cy:.3f} | Conf: {scores[i]*100:.1f}%")
-            
-            except Exception as e:
-                # Si ça crash encore, on veut savoir exactement pourquoi
-                print(f"Erreur lors du traitement : {e}")
+            # On s'arrête après la première analyse pour lire les résultats
+            picam2.stop()
+            break
         
         time.sleep(0.01)
 
