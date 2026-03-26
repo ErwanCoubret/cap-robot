@@ -4,29 +4,19 @@ from picamera2.devices.imx500 import IMX500
 
 MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
 
-print("Chargement du modèle dans la caméra (cela peut prendre quelques secondes la 1ère fois)...")
+print("Chargement du modèle dans la caméra...")
 imx500 = IMX500(MODEL_PATH)
-
-# Initialisation de Picamera2
 picam2 = Picamera2(imx500.camera_num)
 
-# ✨ L'ASTUCE EST ICI :
-# Récupérer la taille d'entrée exacte exigée par le modèle IA
-# On récupère toujours la taille attendue par le modèle (généralement 640x640)
-model_h, model_w = imx500.get_input_size()
-
-# 1. Le flux principal : Résolution classique (ex: 720p), on laisse le format par défaut (YUV420, beaucoup plus léger)
-main_config = {"size": (1280, 720), "format": "YUV420"}
-# 2. Le flux secondaire "lores" : Résolution exigée par le modèle IA (ex: 640x640), format RGB888 pour l'IA
-lores_config = {"size": (model_w, model_h), "format": "RGB888"}
-
-config = picam2.create_preview_configuration(
-    main=main_config, 
-    lores=lores_config, 
-    controls={"FrameRate": 30}
+# ✨ LA CONFIGURATION HEADLESS ÉPURÉE
+# On demande un simple flux vidéo léger pour maintenir le capteur actif. 
+# Pas besoin de lores, l'IMX500 s'occupe de l'IA tout seul !
+config = picam2.create_video_configuration(
+    main={"size": (640, 480), "format": "YUV420"}
 )
-picam2.configure(config)
 
+# On applique la configuration (sans forcer le FrameRate)
+picam2.configure(config)
 picam2.start()
 print("Caméra IA démarrée ! Analyse en cours... (Ctrl+C pour quitter)")
 
