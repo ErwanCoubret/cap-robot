@@ -7,6 +7,7 @@ The Sony IMX500 is a specialized camera module designed for edge AI applications
 ```bash
 # Update and install dependencies
 sudo apt install python3-picamera2 -y
+sudo apt install imx500-all -y
 ```
 
 ## Model loading on IMX500
