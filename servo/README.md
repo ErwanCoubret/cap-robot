@@ -2,6 +2,17 @@
 
 Related info for the servo-motor control module.
 
+## Hardware setup
+
+The servo-motor is connected to the Raspberry Pi 5 as follows:
+
+- **GPIO Pin 18** (6th pin from the top left) is used for the PWM signal to control the servo.
+- The servo's power and ground are connected to the appropriate pins on the Raspberry Pi (usually 5V and GND).
+
+![Servo Wiring Diagram](../images/SG90_wirering.png)
+
+Source https://raspberry-pi.fr/servomoteur-raspberry-pi/ for more details on the wiring and setup
+
 ## Extreme values
 
 With the following code, it is necessary to respect the extreme values of the servo-motor, otherwise it may be damaged.

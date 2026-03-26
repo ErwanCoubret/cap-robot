@@ -27,5 +27,7 @@ It will create a folder with `packerOut.zip` inside.
 
 ```
 sudo apt install imx500-tools
-imx500-package -i packerOut.zip -o yolov8n-face.rpk
+imx500-package -i packerOut.zip -o <model_name>.rpk
 ```
+
+it will create `<model_name>.rpk/network.rpk` which is the file to be used on the camera.
