@@ -91,49 +91,46 @@ try:
             valid_detections = frame.detections[frame.detections.confidence > 0.55]
             
             if len(valid_detections) > 0:
-                # On ne prend que le premier visage détecté
-                bbox, score, class_id, _ = valid_detections[0]
-                x_min, y_min, x_max, y_max = bbox
                 
-                # Centre du visage dans la caméra
-                cx = (x_min + x_max) / 2
-                cy = (y_min + y_max) / 2
-                
-                # -----------------------------------------------------
-                # A. ENVOI À L'ARDUINO (Mouvement des yeux)
-                # -----------------------------------------------------
-                if arduino and arduino.is_open:
-                    # Règle de trois : on adapte l'échelle Caméra -> Écran Arduino
-                    target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
-                    target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
+                # On réutilise TA boucle magique qui fonctionne parfaitement
+                for bbox, score, class_id, _ in valid_detections:
+                    x_min, y_min, x_max, y_max = bbox
                     
-                    # On crée la chaîne exacte attendue par tes Serial.parseInt()
-                    trame = f"{target_x} {target_y}\n"
-                    arduino.write(trame.encode('utf-8'))
-                
-                # -----------------------------------------------------
-                # B. CONTRÔLE DU SERVO (Suivi de la tête)
-                # -----------------------------------------------------
-                # Calcul de l'erreur : où est le visage par rapport au milieu de l'image ?
-                erreur_x = (CAM_WIDTH / 2) - cx 
-                
-                # On met à jour la position du moteur proportionnellement à l'erreur
-                # (Note : inverse le signe "+=" en "-=" si le moteur tourne dans le mauvais sens !)
-                current_servo_pos -= erreur_x * KP
-                
-                # On empêche le code de dépasser tes limites de sécurité [-1.8, 0]
-                current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
-                
-                update_servo(current_servo_pos)
-                
-                print(f"🎯 X:{cx:.1f} Y:{cy:.1f} | ⚙️ Servo:{current_servo_pos:.2f}")
+                    # Centre du visage dans la caméra
+                    cx = (x_min + x_max) / 2
+                    cy = (y_min + y_max) / 2
+                    
+                    # -----------------------------------------------------
+                    # A. ENVOI À L'ARDUINO (Mouvement des yeux)
+                    # -----------------------------------------------------
+                    if arduino and arduino.is_open:
+                        # Règle de trois : on adapte l'échelle Caméra -> Écran Arduino
+                        target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
+                        target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
+                        
+                        trame = f"{target_x} {target_y}\n"
+                        arduino.write(trame.encode('utf-8'))
+                    
+                    # -----------------------------------------------------
+                    # B. CONTRÔLE DU SERVO (Suivi de la tête)
+                    # -----------------------------------------------------
+                    erreur_x = (CAM_WIDTH / 2) - cx 
+                    
+                    current_servo_pos -= erreur_x * KP
+                    current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
+                    
+                    update_servo(current_servo_pos)
+                    
+                    print(f"🎯 X:{cx:.1f} Y:{cy:.1f} | ⚙️ Servo:{current_servo_pos:.2f} | Conf: {score*100:.1f}%")
+                    
+                    # On break pour ne traiter que le premier visage détecté à chaque frame
+                    break
                 
 except KeyboardInterrupt:
     print("\n🛑 Arrêt demandé par l'utilisateur.")
 except Exception as e:
     print(f"❌ Erreur inattendue : {e}")
 finally:
-    # On ferme tout très proprement pour ne pas bloquer les ports
     if arduino and arduino.is_open:
         arduino.close()
     lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
