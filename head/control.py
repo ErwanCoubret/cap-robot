@@ -92,61 +92,69 @@ device.deploy(model)
 print("🎯 IA déployée avec succès ! Lancement du tracking global...")
 update_servo(current_servo_pos) # On centre le moteur au démarrage
 
+last_servo_move_time = time.time()
+pwm_active = False
+last_sent_pos = -999  # Valeur impossible pour forcer le 1er envoi
+
 try:
     with device as stream:
         for frame in stream:
             valid_detections = frame.detections[frame.detections.confidence > 0.55]
+            
+            # ==========================================
+            # 1. GESTION DU VISAGE (S'il y en a un)
+            # ==========================================
             if len(valid_detections) > 0:
                 for bbox, score, class_id, _ in valid_detections:
                     x_min, y_min, x_max, y_max = bbox
                     
-                    # 1. RÉCUPÉRATION DES COORDONNÉES NORMALISÉES
-                    cx_norm = (x_min + x_max) / 2
+                    # Coordonnées Normalisées et Effet Miroir
+                    cx_norm = 1.0 - ((x_min + x_max) / 2)
                     cy_norm = (y_min + y_max) / 2
                     
-                    # 🔄 EFFET MIROIR (FLIP GAUCHE/DROITE)
-                    # Si 0.9 devient 0.1, on inverse complètement l'axe horizontal !
-                    cx_norm = 1.0 - cx_norm
-                    
-                    # 2. CONVERSION EN PIXELS RÉELS
                     cx = cx_norm * CAM_WIDTH
                     cy = cy_norm * CAM_HEIGHT
                     
-                    # -----------------------------------------------------
-                    # A. ENVOI À L'ARDUINO (Les yeux suivent en continu)
-                    # -----------------------------------------------------
+                    # --- A. YEUX ARDUINO ---
                     if arduino and arduino.is_open:
                         target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
                         target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
                         trame = f"{target_x} {target_y}\n"
                         arduino.write(trame.encode('utf-8'))
                     
-                    # -----------------------------------------------------
-                    # B. CONTRÔLE DU SERVO (Zones mortes + Travelling)
-                    # -----------------------------------------------------
-                    # Vitesse du travelling (à ajuster. Plus c'est petit, plus c'est fluide/lent)
+                    # --- B. TRAVELLING MOTEUR ---
                     SERVO_STEP = 0.03  
+                    new_pos = current_servo_pos
                     
                     if cx_norm < 0.30:
-                        # Le visage est dans la zone 0-30% (à gauche)
-                        # Le servo tourne doucement d'un pas vers la gauche
-                        current_servo_pos -= SERVO_STEP
-                        
+                        new_pos -= SERVO_STEP
                     elif cx_norm > 0.70:
-                        # Le visage est dans la zone 70-100% (à droite)
-                        # Le servo tourne doucement d'un pas vers la droite
-                        current_servo_pos += SERVO_STEP
+                        new_pos += SERVO_STEP
                         
-                    # Si on est entre 0.30 et 0.70, le `if` est ignoré, le servo ne bouge pas !
+                    new_pos = max(-1.8, min(0.0, new_pos))
+                    
+                    # On n'envoie le signal QUE si la position a vraiment changé
+                    if new_pos != last_sent_pos:
+                        current_servo_pos = new_pos
+                        update_servo(current_servo_pos)
+                        
+                        last_sent_pos = current_servo_pos
+                        last_servo_move_time = time.time() # On relance le chrono !
+                        pwm_active = True
+                        
+                        print(f"🎯 Zone: {cx_norm*100:.0f}% | ⚙️ Servo: {current_servo_pos:.2f}")
+                        
+                    break # On ne traite qu'un seul visage
+            
+            # ==========================================
+            # 2. ANTI-JITTER (Vérification à chaque image)
+            # ==========================================
+            # Si le signal est actif MAIS qu'on n'a pas bougé depuis 0.3s -> On coupe le jus !
+            if pwm_active and (time.time() - last_servo_move_time > 0.3):
+                lgpio.tx_pwm(h, GPIO_PIN, 0, 0)
+                pwm_active = False
+                print("💤 Servo au repos (Signal coupé, fin des tremblements)")
 
-                    # Sécurité des butées du moteur [-1.8 à 0.0]
-                    current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
-                    update_servo(current_servo_pos)
-                    
-                    print(f"🎯 Zone: {cx_norm*100:.0f}% de l'écran | ⚙️ Servo: {current_servo_pos:.2f}")
-                    
-                    break
-                
 except KeyboardInterrupt:
     print("\n🛑 Arrêt demandé par l'utilisateur.")
 except Exception as e:
