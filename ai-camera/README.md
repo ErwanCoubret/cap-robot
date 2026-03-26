@@ -14,6 +14,8 @@ sudo apt install imx500-all -y
 
 https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/imx500-converter?version=3.14.3&progLang=
 
+https://docs.ultralytics.com/integrations/sony-imx500/#software-prerequisites
+
 ### Convert yolo to onnx
 
 Usually we use 

@@ -1,55 +1,58 @@
 import time
-from picamera2 import Picamera2
-from picamera2.devices.imx500 import IMX500
+import numpy as np
+from modlib.apps import Annotator
+from modlib.devices import AiCamera
+from modlib.models import COLOR_FORMAT, MODEL_TYPE, Model
+from modlib.models.post_processors import pp_od_yolo_ultralytics
 
-MODEL_PATH = "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/yolov8n-face.rpk/network.rpk"
+class YOLO(Model):
+    def __init__(self):
+        super().__init__(
+            # Le fichier .zip généré par le packer Ultralytics
+            model_file="/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/packerOut.zip", 
+            model_type=MODEL_TYPE.CONVERTED,
+            color_format=COLOR_FORMAT.RGB,
+            preserve_aspect_ratio=False,
+        )
+        # Chargement des labels. Si tu n'as pas le fichier txt, on force "Visage"
+        try:
+            self.labels = np.genfromtxt(
+                "/home/erwan/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/labels.txt", 
+                dtype=str, delimiter="\n"
+            )
+        except OSError:
+            self.labels = ["Visage"]
 
-imx500 = IMX500(MODEL_PATH)
-picam2 = Picamera2(imx500.camera_num)
-# On reste sur 15 FPS pour la stabilité du flux
-config = picam2.create_video_configuration(main={"size": (640, 480), "format": "YUV420"}, controls={"FrameRate": 15})
-picam2.configure(config)
-picam2.start()
+    def post_process(self, output_tensors):
+        return pp_od_yolo_ultralytics(output_tensors)
 
-print("🎯 DÉCODAGE ACTIF. Place-toi devant la caméra...")
 
-try:
-    while True:
-        metadata = picam2.capture_metadata()
-        data = metadata.get('CnnOutputTensor')
+print("🤖 Initialisation de l'AI Camera (via modlib)...")
+# 15 ou 16 FPS max pour éviter les Timeout du NPU
+device = AiCamera(frame_rate=16) 
+model = YOLO()
+device.deploy(model)
+
+print("🎯 IA déployée avec succès ! Recherche de visages...")
+
+# Le flux s'ouvre proprement ici
+with device as stream:
+    for frame in stream:
+        # On garde uniquement les détections avec confiance > 55%
+        valid_detections = frame.detections[frame.detections.confidence > 0.55]
         
-        if data is not None and len(data) == 1801:
-            meilleur_score = 0
-            cible_x = 0
-            cible_y = 0
-            
-            # On scanne les 300 slots de détection possibles
-            for i in range(300):
-                # Le score de confiance est dans le bloc qui commence à 1201
-                conf = data[1201 + i]
+        if len(valid_detections) > 0:
+            # La boucle magique de modlib : elle unpack proprement !
+            # bbox contient [x_min, y_min, x_max, y_max]
+            for bbox, score, class_id, _ in valid_detections:
+                x_min, y_min, x_max, y_max = bbox
                 
-                if conf > meilleur_score:
-                    meilleur_score = conf
-                    # On récupère les coordonnées correspondantes dans les autres blocs
-                    # Index 1-300: X | Index 301-600: Y
-                    cible_x = data[1 + i]
-                    cible_y = data[301 + i]
-            
-            # On affiche uniquement si la confiance est sérieuse (plus de 50%)
-            if meilleur_score > 0.50:
-                # Normalisation : on divise par 640 (taille du modèle) pour avoir du 0.0 à 1.0
-                cx = cible_x / 640.0
-                cy = cible_y / 640.0
+                # 🎯 CALCUL DU CENTRE POUR TES MOTEURS
+                cx = (x_min + x_max) / 2
+                cy = (y_min + y_max) / 2
                 
-                print(f"🎯 VISAGE ! X: {cx:.3f} Y: {cy:.3f} | Confiance: {meilleur_score*100:.1f}%")
-            else:
-                # print("Recherche...") # Optionnel pour voir si la boucle tourne
-                pass
+                print(f"🎯 VISAGE CENTRÉ EN -> X: {cx:.3f} | Y: {cy:.3f} | Conf: {score*100:.1f}%")
                 
-        time.sleep(0.01)
-
-except KeyboardInterrupt:
-    print("\nArrêt.")
-finally:
-    picam2.stop()
-    picam2.close()
+                # On break pour ne traiter que le premier visage détecté à chaque frame
+                # (Évite au robot de trembler s'il y a 2 personnes)
+                break
