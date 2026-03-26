@@ -99,19 +99,22 @@ try:
             
             if len(valid_detections) > 0:
                 
-                # On réutilise TA boucle magique qui fonctionne parfaitement
                 for bbox, score, class_id, _ in valid_detections:
                     x_min, y_min, x_max, y_max = bbox
                     
-                    # Centre du visage dans la caméra
-                    cx = (x_min + x_max) / 2
-                    cy = (y_min + y_max) / 2
+                    # 1. RÉCUPÉRATION DES COORDONNÉES NORMALISÉES (0.0 à 1.0)
+                    cx_norm = (x_min + x_max) / 2
+                    cy_norm = (y_min + y_max) / 2
+                    
+                    # 2. CONVERSION EN PIXELS RÉELS (0 à 640 / 0 à 480)
+                    cx = cx_norm * CAM_WIDTH
+                    cy = cy_norm * CAM_HEIGHT
                     
                     # -----------------------------------------------------
                     # A. ENVOI À L'ARDUINO (Mouvement des yeux)
                     # -----------------------------------------------------
                     if arduino and arduino.is_open:
-                        # Règle de trois : on adapte l'échelle Caméra -> Écran Arduino
+                        # Plus besoin de diviser par CAM_WIDTH ici, un simple produit en croix suffit !
                         target_x = int((cx / CAM_WIDTH) * TFT_WIDTH)
                         target_y = int((cy / CAM_HEIGHT) * TFT_HEIGHT)
                         
@@ -119,18 +122,21 @@ try:
                         arduino.write(trame.encode('utf-8'))
                     
                     # -----------------------------------------------------
-                    # B. CONTRÔLE DU SERVO (Suivi de la tête)
+                    # B. CONTRÔLE DU SERVO (Suivi de la tête) AVEC ANTI-JITTER
                     # -----------------------------------------------------
                     erreur_x = (CAM_WIDTH / 2) - cx 
                     
-                    current_servo_pos -= erreur_x * KP
-                    current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
+                    # ZONE MORTE (Deadband) : On ignore les micro-mouvements de moins de 30 pixels
+                    # Cela va stopper net les tremblements (jitter) !
+                    if abs(erreur_x) > 30:
+                        current_servo_pos -= erreur_x * KP
+                        # Sécurité des butées
+                        current_servo_pos = max(-1.8, min(0.0, current_servo_pos))
+                        update_servo(current_servo_pos)
                     
-                    update_servo(current_servo_pos)
+                    print(f"🎯 Pixels-> X:{cx:.1f} Y:{cy:.1f} | ⚙️ Servo:{current_servo_pos:.2f} | Conf: {score*100:.1f}%")
                     
-                    print(f"🎯 X:{cx:.1f} Y:{cy:.1f} | ⚙️ Servo:{current_servo_pos:.2f} | Conf: {score*100:.1f}%")
-                    
-                    # On break pour ne traiter que le premier visage détecté à chaque frame
+                    # On break pour ne traiter que le premier visage
                     break
                 
 except KeyboardInterrupt:
