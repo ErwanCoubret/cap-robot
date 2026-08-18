@@ -18,7 +18,7 @@ GFXcanvas16 miniCanvas(128, 128);
 
 // Dimensions
 const int CENTER_X = 120;
-const int CENTER_Y = 120;w
+const int CENTER_Y = 120;
 const int PUPIL_RADIUS = 60;
 
 // Variables de position de la pupille

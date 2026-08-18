@@ -81,3 +81,35 @@ imx500-package -i packerOut.zip -o <model_name>.rpk
 ```
 
 it will create `<model_name>.rpk/network.rpk` which is the file to be used on the camera.
+## Face / person tracking -> ESP32 eyes
+
+`face_tracker.py` runs SSD MobileNetV2 on the IMX500 NPU, keeps the `person`
+class, estimates the head position in the top of the bounding box, maps it to
+the round GC9A01 screen (240x240) and sends `x,y\n` over serial at 115200 baud
+to the ESP32 running `eyes/eyes_serial/eyes_serial.ino`.
+
+```bash
+# on the Raspberry Pi
+python3 ai-camera/face_tracker.py                 # /dev/ttyUSB0, 115200
+python3 ai-camera/face_tracker.py --no-serial     # print coordinates only
+python3 ai-camera/face_tracker.py --port /dev/ttyUSB1 --threshold 0.5
+```
+
+First start uploads ~3.8 MB of network firmware into the sensor (~45 s). Sensor
+frame rate is capped at 15 fps and serial output at 20 Hz on purpose: the ESP32
+reads one line per render loop and flooding it overflows its RX buffer.
+
+### Verified hardware state (Raspberry Pi 5, `cap@192.168.10.127`)
+
+- Camera enumerated: `imx500 [4056x3040 10-bit RGGB]`
+- Packages: `imx500-all 1.12.0-1`, `imx500-firmware 0.FF23+3`, `python3-picamera2 0.3.37-1`
+- ESP32 on `/dev/ttyUSB0` (CH340, `1a86:7523`), user in `dialout`
+- End-to-end inference confirmed: ~185 frames, detections decoded and mapped
+
+### No dedicated face model is installed
+
+Only the stock `imx500-models` set is present (COCO detectors, posenet,
+classifiers) — there is no face-detection `.rpk` and no `packerOut.zip` on the
+Pi. Person detection plus a head estimate is used instead. To switch to a real
+face model, export one with `yolo export ... format=imx` and load the resulting
+`packerOut.zip` as described above.
