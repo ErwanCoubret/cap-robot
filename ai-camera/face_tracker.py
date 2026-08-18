@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Suivi de personne sur l'AI Camera IMX500 -> envoi de la cible a l'ESP32.
+"""Suivi de visage sur l'AI Camera IMX500 -> envoi de la cible a l'ESP32.
 
-Le NPU du capteur execute SSD MobileNetV2 (COCO). On garde la classe 0
-("person"), on isole la boite la plus grande, et on estime la position de la
-tete dans le haut de cette boite. Le point obtenu est projete sur l'ecran rond
-GC9A01 (240x240) puis envoye en "x,y\\n" sur le port serie a 115200 bauds.
+Le NPU du capteur execute YOLOv8n-face (lindevs), converti au format IMX500.
+Le modele integre deja le NMS : la sortie est une liste de boites triees par
+confiance. On garde la plus grande (la personne la plus proche), on projette
+son centre sur l'ecran rond GC9A01 (240x240) et on envoie "x,y\\n" sur le port
+serie a 115200 bauds.
 
-Le protocole serie est volontairement minimal et debite lentement : l'ESP32
-lit une ligne par boucle de rendu, le noyer de messages ferait deborder son
-buffer de reception.
+Le debit serie est volontairement bride : l'ESP32 lit une ligne par boucle de
+rendu, le noyer de messages ferait deborder son buffer de reception.
 """
 
 import argparse
@@ -19,24 +19,25 @@ import time
 import serial
 from picamera2 import Picamera2
 from picamera2.devices import IMX500
-from picamera2.devices.imx500 import NetworkIntrinsics
 
-MODEL_PATH = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
+MODEL_RPK = "/home/cap/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/rpk/network.rpk"
 
 # Ecran rond GC9A01 pilote par eyes_serial.ino
 SCREEN = 240
 CENTER = SCREEN // 2
 
-PERSON_CLASS = 0
+# Le modele recoit une image carree 640x640 : la frame 640x480 y est centree
+# entre deux bandes noires. Les boites sortent en pixels absolus dans cet
+# espace carre, au format [x0, y0, x1, y1] -- et non dans la convention
+# (y, x) de picamera2, d'ou la conversion manuelle plutot que
+# convert_inference_coords().
+MODEL_SIDE = 640
 
-# La boite englobe tout le corps : la tete se situe dans le premier sixieme.
-HEAD_Y_RATIO = 0.15
-
-# Cadence d'envoi serie. 20 Hz suffit largement pour l'oeil, qui lisse
-# lui-meme le deplacement (SMOOTHING = 0.08 cote firmware).
+# Cadence d'envoi serie. 20 Hz suffit : le firmware lisse lui-meme le
+# deplacement (SMOOTHING = 0.08).
 SEND_INTERVAL = 0.05
 
-# Au-dela de ce delai sans detection, l'oeil revient au centre.
+# Au-dela de ce delai sans visage, l'oeil revient au centre.
 IDLE_TIMEOUT = 1.5
 
 running = True
@@ -60,38 +61,44 @@ def open_serial(port, baud):
     return ser
 
 
-def best_person(imx500, picam2, metadata, threshold):
-    """Retourne la boite pixel (x, y, w, h) de la personne la plus proche."""
+def best_face(imx500, metadata, threshold):
+    """Retourne la boite [x0, y0, x1, y1] du visage le plus grand."""
     outputs = imx500.get_outputs(metadata, add_batch=True)
     if outputs is None:
         return None
 
-    boxes, scores, classes = outputs[0][0], outputs[1][0], outputs[2][0]
+    boxes, scores = outputs[0][0], outputs[1][0]
 
     best = None
     best_area = 0.0
-    for box, score, category in zip(boxes, scores, classes):
-        if int(category) != PERSON_CLASS or float(score) < threshold:
-            continue
-        # convert_inference_coords gere l'ordre des coordonnees et le recadrage
-        # applique par l'ISP : on evite de reimplementer cette conversion.
-        x, y, w, h = imx500.convert_inference_coords(box, metadata, picam2)
-        area = w * h
+    for box, score in zip(boxes, scores):
+        if float(score) < threshold:
+            # Les boites sont triees par confiance : la suite est sous le seuil.
+            break
+        x0, y0, x1, y1 = (float(v) for v in box)
+        area = (x1 - x0) * (y1 - y0)
         if area > best_area:
             best_area = area
-            best = (x, y, w, h)
+            best = (x0, y0, x1, y1)
     return best
 
 
 def to_screen(box, frame_w, frame_h):
-    """Projette la tete de `box` sur l'ecran, en miroir horizontal.
+    """Projette le centre du visage sur l'ecran, en miroir horizontal.
 
     Le miroir rend le suivi naturel : quand la personne va vers sa droite,
     l'oeil regarde du meme cote qu'elle depuis son point de vue.
     """
-    x, y, w, h = box
-    cx = (x + w / 2.0) / frame_w
-    cy = (y + h * HEAD_Y_RATIO) / frame_h
+    x0, y0, x1, y1 = box
+
+    # Retrait des bandes de letterbox avant la normalisation.
+    pad_x = (MODEL_SIDE - frame_w * MODEL_SIDE / max(frame_w, frame_h)) / 2
+    pad_y = (MODEL_SIDE - frame_h * MODEL_SIDE / max(frame_w, frame_h)) / 2
+    span_x = MODEL_SIDE - 2 * pad_x
+    span_y = MODEL_SIDE - 2 * pad_y
+
+    cx = ((x0 + x1) / 2 - pad_x) / span_x
+    cy = ((y0 + y1) / 2 - pad_y) / span_y
 
     sx = int((1.0 - cx) * SCREEN)
     sy = int(cy * SCREEN)
@@ -102,11 +109,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="/dev/ttyUSB0")
     parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--model", default=MODEL_RPK)
     parser.add_argument("--threshold", type=float, default=0.45)
     parser.add_argument("--fps", type=int, default=15,
                         help="cadence capteur, volontairement basse pour limiter la chauffe")
     parser.add_argument("--no-serial", action="store_true",
                         help="affiche les coordonnees sans ouvrir le port serie")
+    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, stop)
@@ -121,18 +130,12 @@ def main():
             return 1
         print(f"Serie ouverte sur {args.port} a {args.baud} bauds")
 
-    imx500 = IMX500(MODEL_PATH)
-    intrinsics = imx500.network_intrinsics or NetworkIntrinsics()
-    if intrinsics.task != "object detection":
-        print(f"Modele inattendu sur le capteur : {intrinsics.task}", file=sys.stderr)
-        return 1
-
+    imx500 = IMX500(args.model)
     picam2 = Picamera2(imx500.camera_num)
-    config = picam2.create_preview_configuration(
+    picam2.configure(picam2.create_preview_configuration(
         controls={"FrameRate": args.fps}, buffer_count=8
-    )
-    picam2.configure(config)
-    # Le premier demarrage televerse ~3.8 Mo de firmware reseau dans le capteur.
+    ))
+    # Le premier demarrage televerse ~3 Mo de firmware reseau dans le capteur.
     imx500.show_network_fw_progress_bar()
     picam2.start()
     frame_w, frame_h = picam2.camera_configuration()["main"]["size"]
@@ -148,21 +151,21 @@ def main():
             metadata = picam2.capture_metadata()
             now = time.monotonic()
 
-            box = best_person(imx500, picam2, metadata, args.threshold)
+            box = best_face(imx500, metadata, args.threshold)
             if box is not None:
                 last_seen = now
                 centered = False
                 point = to_screen(box, frame_w, frame_h)
             elif not centered and now - last_seen > IDLE_TIMEOUT:
-                # Personne en vue : on recentre une seule fois puis on se tait.
+                # Plus de visage : on recentre une seule fois puis on se tait.
                 point = (CENTER, CENTER)
                 centered = True
             else:
                 continue
 
-            if point == last_point and now - last_send < IDLE_TIMEOUT:
-                continue
             if now - last_send < SEND_INTERVAL:
+                continue
+            if point == last_point and now - last_send < IDLE_TIMEOUT:
                 continue
 
             line = f"{point[0]},{point[1]}\n"
@@ -173,6 +176,8 @@ def main():
                     # L'ESP32 ne consomme plus : on saute la trame plutot que
                     # de bloquer la boucle de capture.
                     print("Ecriture serie en timeout, trame ignoree", file=sys.stderr)
+                if args.verbose:
+                    print(line.strip())
             else:
                 print(line.strip())
 

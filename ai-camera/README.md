@@ -81,12 +81,42 @@ imx500-package -i packerOut.zip -o <model_name>.rpk
 ```
 
 it will create `<model_name>.rpk/network.rpk` which is the file to be used on the camera.
-## Face / person tracking -> ESP32 eyes
+## Face tracking -> ESP32 eyes
 
-`face_tracker.py` runs SSD MobileNetV2 on the IMX500 NPU, keeps the `person`
-class, estimates the head position in the top of the bounding box, maps it to
-the round GC9A01 screen (240x240) and sends `x,y\n` over serial at 115200 baud
-to the ESP32 running `eyes/eyes_serial/eyes_serial.ino`.
+`face_tracker.py` runs YOLOv8n-face (lindevs) on the IMX500 NPU, keeps the
+largest face, maps its centre to the round GC9A01 screen (240x240) and sends
+`x,y\n` over serial at 115200 baud to the ESP32 running
+`eyes/eyes_serial/eyes_serial.ino`.
+
+### Packing the face model onto the sensor
+
+`yolo export ... format=imx` already produced
+`models/yolov8n-face-lindevs_imx_model/packerOut.zip`. Turn it into a sensor
+firmware image once, on the Pi:
+
+```bash
+cd ai-camera/models/yolov8n-face-lindevs_imx_model
+imx500-package -i packerOut.zip -o rpk     # -> rpk/network.rpk
+```
+
+The result is 3.0 MB and uses 89% of the 8 MB on-chip memory (`Fit In Chip:
+true`). `rpk/` is not committed: regenerate it after any re-export.
+
+### Output tensor layout (measured, not documented)
+
+The Ultralytics IMX export bakes in NMS, so the sensor returns four tensors:
+boxes `(1, 300, 4)`, scores `(1, 300)`, classes `(1, 300)`, count `(1, 1)`,
+sorted by confidence.
+
+Two traps, both verified against a captured frame:
+
+- boxes are `[x0, y0, x1, y1]`, **not** picamera2's usual `(y, x)` order
+- they are absolute pixels in the model's square 640x640 input, so the 640x480
+  frame is letterboxed with 80 px bars top and bottom
+
+`imx500.convert_inference_coords()` therefore does not apply here — it expects
+normalised boxes and returns six-digit garbage. `to_screen()` removes the
+padding and normalises by hand.
 
 ```bash
 # on the Raspberry Pi
@@ -106,10 +136,5 @@ reads one line per render loop and flooding it overflows its RX buffer.
 - ESP32 on `/dev/ttyUSB0` (CH340, `1a86:7523`), user in `dialout`
 - End-to-end inference confirmed: ~185 frames, detections decoded and mapped
 
-### No dedicated face model is installed
-
-Only the stock `imx500-models` set is present (COCO detectors, posenet,
-classifiers) — there is no face-detection `.rpk` and no `packerOut.zip` on the
-Pi. Person detection plus a head estimate is used instead. To switch to a real
-face model, export one with `yolo export ... format=imx` and load the resulting
-`packerOut.zip` as described above.
+- Face model live: 0.82 confidence on every frame, ~11 fps inference
+- Full loop verified: camera -> detection -> screen mapping -> serial to ESP32
