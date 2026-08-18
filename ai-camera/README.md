@@ -22,13 +22,14 @@ On the Raspberry Pi 5:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-picamera2 imx500-all imx500-tools
+sudo apt install -y python3-picamera2 imx500-all imx500-tools python3-opencv
 sudo reboot
 ```
 
 - `imx500-all` pulls in the sensor firmware and the stock model set
 - `imx500-tools` provides `imx500-package`, needed to pack a custom model
 - `python3-picamera2` is the capture and inference API
+- `python3-opencv` is only needed for the visualiser, not for the tracker
 
 `pyserial` ships with Raspberry Pi OS; check with `python3 -c "import serial"`.
 
@@ -185,6 +186,31 @@ about 45 seconds, with a progress bar. Later starts reuse it and are fast.
 
 `--no-serial` is the safe way to debug: it prints the coordinates it *would*
 send, and never opens the serial port.
+
+### Visualising what the robot sees
+
+`face_tracker_visualizer.py` runs the same detection and drives the eye exactly
+like the tracker, but also opens a window the size of the eye screen (240x240)
+showing the camera view, the detected face and the position being sent.
+
+```bash
+cd ~/cap-robot/ai-camera
+python3 face_tracker_visualizer.py --scale 2      # window doubled, eye driven
+python3 face_tracker_visualizer.py --no-serial    # preview only
+```
+
+`q` or `Esc` quits. The window must be on the Pi's own display; over SSH,
+prefix the command with `DISPLAY=:0`.
+
+The preview is mirrored, like a selfie, which puts it in the same frame of
+reference as the coordinates sent to the eye — so the red dot is drawn at the
+transmitted position directly. If the dot sits on the face, the mapping is
+correct. The grey circle marks how far the pupil can actually look: past it,
+the firmware clamps to the edge.
+
+Only one process can hold the IMX500 at a time. `Device or resource busy` on
+startup means another run is still alive — wait for it, or `pkill -f
+face_tracker`.
 
 ### Why the rates are capped
 
