@@ -159,7 +159,7 @@ export class CapdClient implements HardwarePort {
     let socket: WebSocket
     try {
       socket = new WebSocket(url)
-    } catch (error) {
+    } catch {
       this.scheduleReconnect()
       return
     }

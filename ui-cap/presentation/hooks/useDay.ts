@@ -48,6 +48,7 @@ export function useDay(): DayView {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is set after the fetch resolves, not synchronously
     void load()
   }, [load])
 

@@ -23,7 +23,10 @@ export const EVENT_STREAM_PATH = '/api/events'
  */
 export function useAppEvents(onEvent: (event: AppEvent) => void): void {
   const handler = useRef(onEvent)
-  handler.current = onEvent
+
+  useEffect(() => {
+    handler.current = onEvent
+  }, [onEvent])
 
   useEffect(() => {
     const source = new EventSource(EVENT_STREAM_PATH)

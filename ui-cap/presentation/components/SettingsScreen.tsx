@@ -52,6 +52,7 @@ export function SettingsScreen({
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is set after the fetch resolves, not synchronously
     void loadPairing()
   }, [loadPairing])
 

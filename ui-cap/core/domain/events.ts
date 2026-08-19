@@ -6,7 +6,7 @@
  * channel is what lets overlays stay in sync with work happening server-side.
  */
 
-import type { CameraState, HardwareStatus, TrackingState } from './hardware'
+import type { HardwareStatus } from './hardware'
 
 /** The daemon connection came up or went down. */
 export interface HardwareOnlineEvent {

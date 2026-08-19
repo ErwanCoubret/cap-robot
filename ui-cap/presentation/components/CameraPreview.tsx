@@ -9,34 +9,35 @@
  * must hand the camera back.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 export interface CameraPreviewProps {
   available: boolean
 }
 
 export function CameraPreview({ available }: CameraPreviewProps) {
-  const [failed, setFailed] = useState(false)
-  // A fresh query string per mount avoids the browser reusing a stream it has
-  // already closed.
-  const [nonce, setNonce] = useState<number | null>(null)
-
-  useEffect(() => {
-    setNonce(Date.now())
-    setFailed(false)
-  }, [available])
-
   if (!available) {
     return (
-      <Placeholder text="Caméra non détectée" hint="Le suivi du visage est indisponible." />
+      <Placeholder
+        text="Caméra non détectée"
+        hint="Le suivi du visage est indisponible."
+      />
     )
   }
 
-  if (failed || nonce === null) {
+  // Keyed on availability so a camera coming back gets a fresh stream and a
+  // clean error state, without an effect resetting either.
+  return <Stream key="available" />
+}
+
+function Stream() {
+  const [failed, setFailed] = useState(false)
+
+  if (failed) {
     return (
       <Placeholder
-        text={failed ? 'Aperçu indisponible' : 'Ouverture de la caméra…'}
-        hint={failed ? 'La caméra est peut-être utilisée ailleurs.' : undefined}
+        text="Aperçu indisponible"
+        hint="La caméra est peut-être utilisée ailleurs."
       />
     )
   }
@@ -45,7 +46,9 @@ export function CameraPreview({ available }: CameraPreviewProps) {
     <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-dark">
       {/* eslint-disable-next-line @next/next/no-img-element -- a live MJPEG stream cannot go through next/image */}
       <img
-        src={`/api/camera/preview?t=${nonce}`}
+        // The proxy answers no-store, so a remount always opens a new stream
+        // rather than reusing one the daemon has already closed.
+        src="/api/camera/preview"
         alt="Aperçu de la caméra"
         className="absolute inset-0 h-full w-full object-contain"
         onError={() => setFailed(true)}
