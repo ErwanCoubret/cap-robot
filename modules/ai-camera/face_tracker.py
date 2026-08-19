@@ -15,12 +15,21 @@ import argparse
 import signal
 import sys
 import time
+from pathlib import Path
 
 import serial
 from picamera2 import Picamera2
 from picamera2.devices import IMX500
 
-MODEL_RPK = "/home/cap/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model/rpk/network.rpk"
+# Chemin deduit de l'emplacement du script : il survit ainsi aux
+# reorganisations de l'arborescence et aux clones ailleurs que dans ~/cap-robot.
+MODEL_RPK = str(
+    Path(__file__).resolve().parent
+    / "models"
+    / "yolov8n-face-lindevs_imx_model"
+    / "rpk"
+    / "network.rpk"
+)
 
 # Ecran rond GC9A01 pilote par eyes_serial.ino
 SCREEN = 240

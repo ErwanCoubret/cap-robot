@@ -14,7 +14,15 @@ def test_status_shape(client: TestClient) -> None:
 
     assert payload["mock"] is True
     assert payload["capabilities"]["servo"] is False
-    assert set(payload) == {"mock", "capabilities", "camera", "tracking", "recording", "speaking"}
+    assert set(payload) == {
+        "mock",
+        "capabilities",
+        "camera",
+        "tracking",
+        "eyes",
+        "recording",
+        "speaking",
+    }
     assert payload["camera"]["vflip"] is False
 
 
@@ -87,3 +95,47 @@ def test_sound_accepts_known_names_only(client: TestClient) -> None:
     rejected = client.post("/sound", json={"name": "kaboom"})
     assert rejected.status_code == 400
     assert "chime" in rejected.json()["detail"]
+
+
+def test_tracking_can_be_toggled(client: TestClient) -> None:
+    started = client.post("/tracking/start").json()
+    assert started["enabled"] is True
+
+    stopped = client.post("/tracking/stop").json()
+    assert stopped["enabled"] is False
+
+
+def test_camera_settings_persist_the_flip(client: TestClient) -> None:
+    body = client.post("/camera/settings", json={"vflip": True}).json()
+
+    assert body["camera"]["vflip"] is True
+    assert client.get("/status").json()["camera"]["vflip"] is True
+
+
+def test_snapshot_returns_a_jpeg(client: TestClient) -> None:
+    response = client.get("/camera/snapshot")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content[:2] == b"\xff\xd8"
+
+
+def test_snapshot_releases_the_camera_when_nothing_else_needs_it(client: TestClient) -> None:
+    client.post("/tracking/stop")
+    client.get("/camera/snapshot")
+
+    runtime = client.app.state.runtime
+    assert runtime.preview.subscribers == 0
+
+
+def test_expression_is_played(client: TestClient) -> None:
+    body = client.post("/eyes/expression", json={"name": "happy"}).json()
+
+    assert body == {"played": True, "name": "happy"}
+
+
+def test_unknown_expression_is_rejected(client: TestClient) -> None:
+    rejected = client.post("/eyes/expression", json={"name": "smoulder"})
+
+    assert rejected.status_code == 400
+    assert "happy" in rejected.json()["detail"]

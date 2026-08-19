@@ -153,7 +153,7 @@ poor accuracy and the calibration data has to match the robot's real scene.
 `packerOut.zip` cannot be loaded directly — it has to become a `.rpk`:
 
 ```bash
-cd ~/cap-robot/ai-camera/models/yolov8n-face-lindevs_imx_model
+cd ~/cap-robot/modules/ai-camera/models/yolov8n-face-lindevs_imx_model
 imx500-package -i packerOut.zip -o rpk
 ```
 
@@ -173,8 +173,14 @@ never load, whatever you do afterwards.
 
 ## 4. Run the tracker
 
+> The robot daemon (`capd`) owns the camera and the serial port whenever it is
+> running, and only one process can hold either. Stop it first —
+> `sudo systemctl stop capd` — otherwise these commands fail with
+> `Device or resource busy`. In normal operation face tracking is done by the
+> daemon; the scripts below are bring-up and debugging tools.
+
 ```bash
-cd ~/cap-robot
+cd ~/cap-robot/modules
 
 python3 ai-camera/face_tracker.py                  # normal run, /dev/ttyUSB0
 python3 ai-camera/face_tracker.py --verbose        # also print what is sent

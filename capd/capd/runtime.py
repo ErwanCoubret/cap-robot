@@ -22,10 +22,15 @@ from .hardware.audio import (
     MockSpeaker,
     Speaker,
 )
+from .hardware.camera import FaceCamera, ImxCamera, MockCamera
+from .hardware.eyes_bus import EyesBus, EyesLink, MockEyesLink, SerialEyesLink
 from .hardware.tts import MockTts, SupertonicTts, TextToSpeech
 from .services.recorder import RecorderService
 from .services.speaker import SpeakService
 from .settings_store import Settings, SettingsStore
+from .vision.camera_service import CameraService
+from .vision.preview import PreviewStream
+from .vision.tracker import FaceTracker
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +61,20 @@ def build_tts(config: Config, capabilities: Capabilities) -> TextToSpeech:
     return MockTts()
 
 
+def build_camera(config: Config, capabilities: Capabilities) -> FaceCamera:
+    """Pick the camera adapter matching the detected hardware."""
+    if capabilities.mock or not capabilities.camera:
+        return MockCamera(fps=config.camera_fps)
+    return ImxCamera(config.face_model, fps=config.camera_fps)
+
+
+def build_eyes_link(config: Config, capabilities: Capabilities) -> EyesLink:
+    """Pick the transport to the eyes matching the detected hardware."""
+    if capabilities.mock or not capabilities.eyes:
+        return MockEyesLink()
+    return SerialEyesLink(config.serial_port, config.serial_baud)
+
+
 class Runtime:
     """Holds the daemon's long-lived collaborators."""
 
@@ -67,6 +86,9 @@ class Runtime:
         events: EventHub,
         recorder: RecorderService,
         speech: SpeakService,
+        eyes: EyesBus | None,
+        preview: PreviewStream,
+        camera: CameraService,
     ) -> None:
         self.config = config
         self.capabilities = capabilities
@@ -74,6 +96,9 @@ class Runtime:
         self.events = events
         self.recorder = recorder
         self.speech = speech
+        self.eyes = eyes
+        self.preview = preview
+        self.camera = camera
 
     @classmethod
     def build(cls, config: Config | None = None) -> "Runtime":
@@ -101,7 +126,37 @@ class Runtime:
             events=events,
             work_dir=config.data_dir,
         )
-        return cls(config, capabilities, settings, events, recorder, speech)
+
+        eyes: EyesBus | None = None
+        try:
+            eyes = EyesBus(build_eyes_link(config, capabilities))
+        except Exception:
+            # The port disappeared between the probe and here; face tracking is
+            # disabled but the preview and everything else still work.
+            logger.warning("eyes link unavailable", exc_info=True)
+
+        preview = PreviewStream()
+        camera = CameraService(
+            camera_factory=lambda: build_camera(config, capabilities),
+            tracker=FaceTracker(),
+            preview=preview,
+            events=events,
+            settings=settings,
+            eyes=eyes,
+            available=capabilities.camera,
+        )
+
+        return cls(
+            config,
+            capabilities,
+            settings,
+            events,
+            recorder,
+            speech,
+            eyes,
+            preview,
+            camera,
+        )
 
     async def start(self) -> None:
         """Start background services. Safe to call once per process."""
@@ -118,29 +173,28 @@ class Runtime:
             logger.warning("capability unavailable part=%s reason=%s", part, reason)
 
         self.speech.start()
+        if self.eyes is not None:
+            self.eyes.start()
+        self.camera.refresh()
 
     async def stop(self) -> None:
         """Stop background services and release hardware."""
         logger.info("capd stopping")
         self.recorder.shutdown()
         self.speech.shutdown()
+        self.camera.shutdown()
+        if self.eyes is not None:
+            self.eyes.stop()
 
     def status(self) -> dict[str, Any]:
         """Return the full daemon status payload consumed by the UI."""
-        settings = self.settings.get()
+        vision = self.camera.status()
         return {
             "mock": self.capabilities.mock,
             "capabilities": self.capabilities.to_dict(),
-            "camera": {
-                "streaming": False,
-                "vflip": settings.vflip,
-                "available": self.capabilities.camera,
-            },
-            "tracking": {
-                "active": False,
-                "enabled": settings.tracking_enabled,
-                "face_visible": False,
-            },
+            "camera": vision["camera"],
+            "tracking": vision["tracking"],
+            "eyes": self.eyes.status() if self.eyes is not None else {"available": False},
             "recording": self.recorder.status(),
             "speaking": self.speech.status(),
         }
