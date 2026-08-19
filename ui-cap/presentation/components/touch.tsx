@@ -29,35 +29,45 @@ const TONE_CLASSES: Record<Tone, string> = {
   accent: 'bg-purple-main text-white active:brightness-90',
 }
 
+/**
+ * Two sizes of action button.
+ *
+ * `primary` is the home screen's headline action; `compact` is for secondary
+ * screens where several actions stack in a column — still at the 88 px touch
+ * floor, never below it.
+ */
+export type ButtonSize = 'primary' | 'compact'
+
 export interface BigButtonProps {
   label: string
   icon?: IconName
   hint?: string
   tone?: Tone
+  size?: ButtonSize
   href?: string
   onClick?: () => void
   disabled?: boolean
   className?: string
 }
 
-/**
- * A primary action: at least 140 px tall, with the label always visible.
- *
- * Renders as a link when ``href`` is given so navigation works without
- * JavaScript having to hydrate first.
- */
 export function BigButton({
   label,
   icon,
   hint,
   tone = 'primary',
+  size = 'primary',
   href,
   onClick,
   disabled = false,
   className = '',
 }: BigButtonProps) {
+  const compact = size === 'compact'
+
   const classes = [
-    'flex flex-col items-center justify-center gap-3 rounded-3xl px-4 py-5 text-center',
+    'flex items-center justify-center rounded-3xl text-center',
+    compact
+      ? 'flex-row gap-2 rounded-2xl px-3 py-2'
+      : 'flex-col gap-3 px-4 py-5',
     'shadow-sm transition-transform duration-100 active:scale-[0.97]',
     'disabled:opacity-40 disabled:active:scale-100',
     TONE_CLASSES[tone],
@@ -66,15 +76,23 @@ export function BigButton({
 
   const content = (
     <>
-      {icon ? <Icon name={icon} size={48} strokeWidth={2.2} /> : null}
-      <span className="text-2xl font-semibold leading-tight text-balance">{label}</span>
+      {icon ? <Icon name={icon} size={compact ? 28 : 48} strokeWidth={2.2} /> : null}
+      <span
+        className={`font-semibold leading-tight text-balance ${
+          compact ? 'text-lg' : 'text-2xl'
+        }`}
+      >
+        {label}
+      </span>
       {hint ? <span className="text-sm leading-tight opacity-80">{hint}</span> : null}
     </>
   )
 
+  const style = { minHeight: compact ? TOUCH_MIN_PX : PRIMARY_MIN_PX }
+
   if (href && !disabled) {
     return (
-      <Link href={href} className={classes} style={{ minHeight: PRIMARY_MIN_PX }}>
+      <Link href={href} className={classes} style={style}>
         {content}
       </Link>
     )
@@ -86,7 +104,7 @@ export function BigButton({
       onClick={onClick}
       disabled={disabled}
       className={classes}
-      style={{ minHeight: PRIMARY_MIN_PX }}
+      style={style}
     >
       {content}
     </button>
