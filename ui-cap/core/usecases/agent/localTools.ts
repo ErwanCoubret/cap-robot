@@ -6,6 +6,7 @@
  * just a client for a web app.
  */
 
+import type { DaySummary } from '../../domain/flots'
 import type { ToolDefinition } from '../../ports/ai'
 import type { ExpressionName, HardwarePort } from '../../ports/hardware'
 import type { AlarmService } from '../alarms/alarmService'
@@ -26,6 +27,8 @@ export interface LocalToolDeps {
   timezone: string
   /** Publishes a notification onto the screen. */
   notify?: (notification: { title: string; body: string; speak: boolean }) => void
+  /** Reads the cached view of the day, without calling Flots. */
+  readDay?: () => Promise<DaySummary>
 }
 
 export interface LocalTool {
@@ -221,9 +224,45 @@ const setExpression: LocalTool = {
   },
 }
 
+const getDaySummary: LocalTool = {
+  definition: {
+    name: 'get_day_summary',
+    description:
+      "Donne les tâches du jour et les tâches en retard, telles que le robot les a en mémoire. À utiliser pour « ma journée », « qu'est-ce que j'ai aujourd'hui », « suis-je en retard ».",
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  async run(_args, deps) {
+    const day = await deps.readDay?.()
+    if (!day || !day.syncedAt) {
+      return {
+        ok: false,
+        text: 'La journée n’a pas encore été synchronisée avec Flots.',
+      }
+    }
+
+    if (day.tasks.length === 0 && day.overdue.length === 0) {
+      return { ok: true, text: 'Rien de prévu aujourd’hui.', data: day }
+    }
+
+    const parts: string[] = []
+    if (day.tasks.length > 0) {
+      parts.push(
+        `Aujourd’hui : ${day.tasks.map((task) => task.title).join(', ')}`,
+      )
+    }
+    if (day.overdue.length > 0) {
+      parts.push(
+        `En retard : ${day.overdue.map((task) => task.title).join(', ')}`,
+      )
+    }
+    return { ok: true, text: parts.join('. '), data: day }
+  },
+}
+
 /** Every tool the robot provides on its own. */
 export const LOCAL_TOOLS: LocalTool[] = [
   getCurrentDatetime,
+  getDaySummary,
   setAlarm,
   listAlarms,
   deleteAlarm,

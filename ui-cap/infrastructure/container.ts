@@ -10,9 +10,11 @@
 import { join } from 'node:path'
 
 import { EMPTY_ALARMS, type AlarmsDocument } from '../core/domain/alarm'
+import type { DaySummary } from '../core/domain/flots'
 import { AgentService } from '../core/usecases/agent/agentService'
 import { ToolRegistry } from '../core/usecases/agent/toolRegistry'
 import { AlarmService } from '../core/usecases/alarms/alarmService'
+import { DayService, EMPTY_DAY } from '../core/usecases/sync/dayService'
 import { VoiceInteractionService } from '../core/usecases/voice/voiceInteraction'
 import { LlmAdapter } from './ai/llmAdapter'
 import { resolveLlmProvider, resolveSttProvider } from './ai/providers'
@@ -37,6 +39,7 @@ export interface AppContainer {
   llm: LlmAdapter
   stt: SttAdapter
   alarms: AlarmService
+  day: DayService
   agent: AgentService
   voice: VoiceInteractionService
 }
@@ -75,6 +78,14 @@ function build(): AppContainer {
     config.timezone,
   )
 
+  const day = new DayService({
+    flots,
+    store: new JsonStore<DaySummary>(join(config.dataDir, 'day.json'), EMPTY_DAY),
+    publish: (event) => events.publish(event),
+    now,
+    timezone: config.timezone,
+  })
+
   const toolDeps = {
     hardware: capd,
     alarms,
@@ -82,6 +93,7 @@ function build(): AppContainer {
     now,
     locale: config.locale,
     timezone: config.timezone,
+    readDay: () => day.read(),
     notify: (notification: { title: string; body: string; speak: boolean }) => {
       events.publish({
         type: 'notification',
@@ -137,6 +149,10 @@ function build(): AppContainer {
   console.info(`cap-ui ${llm.describe()}`)
   console.info(`cap-ui ${stt.describe()}`)
 
+  // Keep the day warm in the background, so "what's on today?" answers at
+  // conversation speed and still answers when the network is down.
+  day.startAutoSync()
+
   return {
     config,
     events,
@@ -148,6 +164,7 @@ function build(): AppContainer {
     llm,
     stt,
     alarms,
+    day,
     agent,
     voice,
   }

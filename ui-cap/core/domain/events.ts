@@ -92,6 +92,14 @@ export interface AgentEvent {
   error?: string
 }
 
+/** The cached view of the user's day was refreshed. */
+export interface DayEvent {
+  type: 'day'
+  syncedAt: string | null
+  taskCount: number
+  overdueCount: number
+}
+
 /** A message worth surfacing on screen, and possibly out loud. */
 export interface NotificationEvent {
   type: 'notification'
@@ -116,6 +124,7 @@ export type AppEvent =
   | SpeakingEvent
   | VoiceEvent
   | AgentEvent
+  | DayEvent
   | NotificationEvent
   | PingEvent
 

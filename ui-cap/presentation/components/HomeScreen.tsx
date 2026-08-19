@@ -13,9 +13,11 @@ import { CapAvatar } from './CapAvatar'
 import { Clock } from './Clock'
 import { BigButton, IconButton, StatusChip, type ChipState } from './touch'
 import { useApp } from '../deps/AppProvider'
+import { useDay } from '../hooks/useDay'
 
 export function HomeScreen() {
   const { hardware, faceVisible, speaking, timezone, locale, ready } = useApp()
+  const day = useDay()
   const status = hardware.status
 
   const chip = (present: boolean | undefined): ChipState => {
@@ -37,6 +39,22 @@ export function HomeScreen() {
               Micro, voix et caméra sont indisponibles.
             </span>
           </p>
+        ) : day.next ? (
+          <a
+            href="/day"
+            className="flex min-w-0 flex-1 flex-col justify-center rounded-2xl bg-white px-4 py-3 shadow-sm"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-main">
+              {day.overdue.length > 0 ? 'En retard' : 'Prochaine échéance'}
+            </span>
+            <span className="truncate text-lg font-semibold text-title-blue">
+              {day.next.title}
+            </span>
+            <span className="text-sm text-gray-main">
+              {formatDue(day.next.endDate, locale, timezone)}
+              {day.tasks.length > 1 ? ` · ${day.tasks.length} tâches aujourd’hui` : ''}
+            </span>
+          </a>
         ) : null}
 
         <CapAvatar speaking={speaking} attentive={faceVisible} size={104} />
@@ -73,4 +91,24 @@ export function HomeScreen() {
       </footer>
     </main>
   )
+}
+
+function formatDue(
+  iso: string | null | undefined,
+  locale: string,
+  timeZone: string,
+): string {
+  if (!iso) {
+    return 'sans heure'
+  }
+  const parsed = Date.parse(iso)
+  if (Number.isNaN(parsed)) {
+    return 'sans heure'
+  }
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  }).format(new Date(parsed))
 }
