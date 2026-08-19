@@ -7,6 +7,9 @@
  * daemon socket or a second alarm ticker per hot reload would be a real bug.
  */
 
+import { LlmAdapter } from './ai/llmAdapter'
+import { resolveLlmProvider, resolveSttProvider } from './ai/providers'
+import { SttAdapter } from './ai/sttAdapter'
 import { CapdClient } from './capd/capdClient'
 import { loadConfig, type AppConfig } from './config'
 import { EventBus } from './events/eventBus'
@@ -23,6 +26,8 @@ export interface AppContainer {
   mcp: McpClient
   pairing: PairingService
   flots: FlotsAdapter
+  llm: LlmAdapter
+  stt: SttAdapter
 }
 
 const CONTAINER_KEY = Symbol.for('cap.container')
@@ -46,11 +51,19 @@ function build(): AppContainer {
   })
   const flots = new FlotsAdapter(mcp, pairing)
 
+  // Provider selection is validated here, at boot: a typo or a missing key is
+  // reported now rather than when someone is standing in front of the robot
+  // waiting for an answer.
+  const llm = new LlmAdapter(resolveLlmProvider())
+  const stt = new SttAdapter(resolveSttProvider())
+
   console.info(
     `cap-ui starting capd=${config.capdUrl} flots=${config.flotsBaseUrl} data=${config.dataDir}`,
   )
+  console.info(`cap-ui ${llm.describe()}`)
+  console.info(`cap-ui ${stt.describe()}`)
 
-  return { config, events, capd, tokens, mcp, pairing, flots }
+  return { config, events, capd, tokens, mcp, pairing, flots, llm, stt }
 }
 
 /** Return the process-wide container, building it on first use. */
