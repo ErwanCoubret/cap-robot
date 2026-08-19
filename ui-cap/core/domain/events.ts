@@ -76,6 +76,31 @@ export interface VoiceEvent {
   error?: string
 }
 
+/** Progress of an agent turn, step by step. */
+export interface AgentEvent {
+  type: 'agent'
+  turnId: string
+  state: 'started' | 'tool' | 'tool_result' | 'message' | 'finished' | 'error'
+  /** Tool being called, on `tool` and `tool_result`. */
+  tool?: string
+  /** What Cap is doing, phrased for the screen. */
+  label?: string
+  /** Whether the tool call succeeded, on `tool_result`. */
+  ok?: boolean
+  /** Cap's answer, on `message` and `finished`. */
+  text?: string
+  error?: string
+}
+
+/** A message worth surfacing on screen, and possibly out loud. */
+export interface NotificationEvent {
+  type: 'notification'
+  id: string
+  title: string
+  body: string
+  level: 'info' | 'warning'
+}
+
 /** Keep-alive so a proxy does not close an idle stream. */
 export interface PingEvent {
   type: 'ping'
@@ -90,6 +115,8 @@ export type AppEvent =
   | RecordingEvent
   | SpeakingEvent
   | VoiceEvent
+  | AgentEvent
+  | NotificationEvent
   | PingEvent
 
 /** Narrow an unknown payload coming off the wire into an {@link AppEvent}. */

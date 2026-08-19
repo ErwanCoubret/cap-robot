@@ -19,7 +19,11 @@ import type {
   ToolCall,
 } from '../../core/ports/ai'
 import { AiUnavailableError } from '../../core/ports/ai'
-import { describeProvider, isUsable, type ProviderDescriptor } from './providers'
+import {
+  describeProvider,
+  isUsable,
+  type ProviderDescriptor,
+} from './providers'
 import { withRetry } from './retry'
 
 /** Model calls hang the whole conversation, so they get a hard ceiling. */
@@ -62,38 +66,70 @@ export class LlmAdapter implements LlmPort {
       )
     }
 
-    const completion = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.provider.model,
-          messages: request.messages.map(toWireMessage),
-          max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
-          temperature: request.temperature ?? DEFAULT_TEMPERATURE,
-          ...(request.tools?.length
-            ? {
-                tools: request.tools.map((tool) => ({
-                  type: 'function' as const,
-                  function: {
-                    name: tool.name,
-                    description: tool.description,
-                    parameters: tool.parameters,
-                  },
-                })),
-                tool_choice: 'auto' as const,
-              }
-            : {}),
-        }),
-      {
-        onRetry: ({ attempt, delayMs, error }) => {
-          console.warn(
-            `llm retry provider=${this.provider.name} attempt=${attempt} delay=${Math.round(delayMs)}ms reason=${describeError(error)}`,
-          )
-        },
-      },
-    )
-
+    const completion = await this.callModel(request)
     return readReply(completion)
   }
+
+  private async callModel(request: LlmRequest): Promise<unknown> {
+    try {
+      return await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.provider.model,
+            messages: request.messages.map(toWireMessage),
+            max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+            temperature: request.temperature ?? DEFAULT_TEMPERATURE,
+            ...(request.tools?.length
+              ? {
+                  tools: request.tools.map((tool) => ({
+                    type: 'function' as const,
+                    function: {
+                      name: tool.name,
+                      description: tool.description,
+                      parameters: tool.parameters,
+                    },
+                  })),
+                  tool_choice: 'auto' as const,
+                }
+              : {}),
+          }),
+        {
+          onRetry: ({ attempt, delayMs, error }) => {
+            console.warn(
+              `llm retry provider=${this.provider.name} attempt=${attempt} delay=${Math.round(delayMs)}ms reason=${describeError(error)}`,
+            )
+          },
+        },
+      )
+    } catch (error) {
+      // "Connection error." tells the user nothing. On a robot whose model
+      // box is simply switched off, naming the endpoint is the whole answer.
+      if (isConnectionFailure(error)) {
+        throw new AiUnavailableError(
+          `${this.provider.label} ne répond pas (${this.provider.baseUrl})`,
+        )
+      }
+      throw error
+    }
+  }
+}
+
+function isConnectionFailure(error: unknown): boolean {
+  const candidate = error as {
+    name?: string
+    status?: number
+    message?: string
+  }
+  if (typeof candidate?.status === 'number') {
+    return false
+  }
+  return (
+    candidate?.name === 'APIConnectionError' ||
+    candidate?.name === 'APIConnectionTimeoutError' ||
+    /connection error|fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(
+      candidate?.message ?? '',
+    )
+  )
 }
 
 function toWireMessage(message: ChatMessage): ChatCompletionMessageParam {
@@ -112,7 +148,10 @@ function toWireMessage(message: ChatMessage): ChatCompletionMessageParam {
       tool_calls: message.toolCalls.map((call) => ({
         id: call.id,
         type: 'function' as const,
-        function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.arguments),
+        },
       })),
     }
   }
@@ -158,7 +197,10 @@ export function readReply(completion: unknown): LlmReply {
     text: readContent(message.content),
     toolCalls,
     usage: usage
-      ? { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens }
+      ? {
+          promptTokens: usage.prompt_tokens,
+          completionTokens: usage.completion_tokens,
+        }
       : undefined,
   }
 }
@@ -205,13 +247,20 @@ export function parseArguments(raw: unknown): Record<string, unknown> {
       ? (parsed as Record<string, unknown>)
       : {}
   } catch {
-    console.warn('unparsable tool arguments, treating as empty', stripped.slice(0, 200))
+    console.warn(
+      'unparsable tool arguments, treating as empty',
+      stripped.slice(0, 200),
+    )
     return {}
   }
 }
 
 function describeError(error: unknown): string {
-  const candidate = error as { status?: number; name?: string; message?: string }
+  const candidate = error as {
+    status?: number
+    name?: string
+    message?: string
+  }
   return candidate?.status
     ? `HTTP ${candidate.status}`
     : (candidate?.name ?? candidate?.message ?? 'unknown')
