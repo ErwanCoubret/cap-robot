@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capd"
+version = "0.1.0"
+description = "Cap robot hardware daemon: owns the camera, the eyes serial link, the mic and the speaker."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pyserial>=3.5",
+    "pillow>=10.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+# Raspberry Pi only. picamera2 is installed from apt (python3-picamera2) because
+# it is not reliably pip-installable; the venv is created with
+# --system-site-packages so the daemon can see it.
+hw = []
+tts = ["supertonic>=1.3.1", "soundfile>=0.12"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+capd = "capd.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["capd*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning:capd.*"]
