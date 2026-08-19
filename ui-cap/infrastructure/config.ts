@@ -21,6 +21,8 @@ export interface AppConfig {
   locale: 'fr' | 'en'
   /** IANA timezone used for the clock, the day view and alarms. */
   timezone: string
+  /** Local time Cap reads the day out loud, `HH:MM`. */
+  briefingTime: string
 }
 
 function env(name: string, fallback: string): string {
@@ -41,5 +43,6 @@ export function loadConfig(): AppConfig {
     publicUrl: env('CAP_PUBLIC_URL', 'http://localhost:3000').replace(/\/$/, ''),
     locale: env('CAP_LOCALE', 'fr') === 'en' ? 'en' : 'fr',
     timezone: env('CAP_TIMEZONE', 'Europe/Paris'),
+    briefingTime: env('CAP_BRIEFING_TIME', '08:00'),
   }
 }

@@ -17,7 +17,7 @@ const KEEPALIVE_MS = 15_000
 export const dynamic = 'force-dynamic'
 
 export function GET(request: NextRequest): Response {
-  const { events, capd } = getContainer()
+  const { events, capd, scheduler } = getContainer()
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({
@@ -67,6 +67,13 @@ export function GET(request: NextRequest): Response {
       // A freshly connected client should not have to wait for the next
       // change to learn the current state.
       send({ type: 'hardware', online: capd.lastStatus() !== null, status: capd.lastStatus() })
+
+      // Including a ringing alarm matters: a kiosk that reloaded mid-ring
+      // would otherwise show nothing while the robot keeps making noise.
+      const ringing = scheduler.ringingEvent()
+      if (ringing) {
+        send(ringing)
+      }
     },
   })
 

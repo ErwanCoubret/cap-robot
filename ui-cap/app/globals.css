@@ -68,37 +68,44 @@
 }
 
 /*
- * The robot runs one fixed 800x480 touch panel in a kiosk browser. There is no
- * mouse, no keyboard and no reason to ever scroll the shell itself, so page
- * scrolling and every desktop affordance are turned off globally.
+ * Base styles go in the base layer on purpose. Unlayered rules win over every
+ * layered one whatever their specificity, so an unlayered `button { color }`
+ * here would quietly override every text-colour utility in the interface.
  */
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
+@layer base {
+  /*
+   * The robot runs one fixed 800x480 touch panel in a kiosk browser. There is
+   * no mouse, no keyboard and no reason to ever scroll the shell itself, so
+   * page scrolling and every desktop affordance are turned off globally.
+   */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
 
-body {
-  margin: 0;
-  background-color: var(--color-blue-ulight);
-  color: var(--color-gray-dark);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
+  body {
+    margin: 0;
+    background-color: var(--color-blue-ulight);
+    color: var(--color-gray-dark);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
 
-/* Fingers, not cursors: no text selection, no long-press menus, no 300ms delay. */
-* {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  touch-action: manipulation;
-  user-select: none;
-}
+  /* Fingers, not cursors: no selection, no long-press menus, no 300ms delay. */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    user-select: none;
+  }
 
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
 }
 
 /*

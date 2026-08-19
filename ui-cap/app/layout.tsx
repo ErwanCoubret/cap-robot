@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Sora } from 'next/font/google'
 
 import { AppProvider } from '../presentation/deps/AppProvider'
+import { NotificationLayer } from '../presentation/overlays/NotificationLayer'
 import './globals.css'
 
 /**
@@ -34,7 +35,11 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="fr" className={sora.variable}>
       <body className="h-full w-full">
-        <AppProvider>{children}</AppProvider>
+        <AppProvider>
+          {children}
+          {/* Alarms and notices reach the user on any screen. */}
+          <NotificationLayer />
+        </AppProvider>
       </body>
     </html>
   )

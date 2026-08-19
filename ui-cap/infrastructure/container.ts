@@ -13,7 +13,13 @@ import { EMPTY_ALARMS, type AlarmsDocument } from '../core/domain/alarm'
 import type { DaySummary } from '../core/domain/flots'
 import { AgentService } from '../core/usecases/agent/agentService'
 import { ToolRegistry } from '../core/usecases/agent/toolRegistry'
+import { AlarmScheduler } from '../core/usecases/alarms/alarmScheduler'
 import { AlarmService } from '../core/usecases/alarms/alarmService'
+import {
+  EMPTY_PROACTIVE,
+  ProactiveService,
+  type ProactiveState,
+} from '../core/usecases/proactive/proactiveRules'
 import { DayService, EMPTY_DAY } from '../core/usecases/sync/dayService'
 import { VoiceInteractionService } from '../core/usecases/voice/voiceInteraction'
 import { LlmAdapter } from './ai/llmAdapter'
@@ -39,6 +45,8 @@ export interface AppContainer {
   llm: LlmAdapter
   stt: SttAdapter
   alarms: AlarmService
+  scheduler: AlarmScheduler
+  proactive: ProactiveService
   day: DayService
   agent: AgentService
   voice: VoiceInteractionService
@@ -78,12 +86,34 @@ function build(): AppContainer {
     config.timezone,
   )
 
+  const scheduler = new AlarmScheduler({
+    alarms,
+    hardware: capd,
+    publish: (event) => events.publish(event),
+    now,
+    timezone: config.timezone,
+  })
+
   const day = new DayService({
     flots,
     store: new JsonStore<DaySummary>(join(config.dataDir, 'day.json'), EMPTY_DAY),
     publish: (event) => events.publish(event),
     now,
     timezone: config.timezone,
+  })
+
+  const proactive = new ProactiveService({
+    hardware: capd,
+    store: new JsonStore<ProactiveState>(
+      join(config.dataDir, 'proactive.json'),
+      EMPTY_PROACTIVE,
+    ),
+    publish: (event) => events.publish(event),
+    readDay: () => day.read(),
+    readPairing: () => pairing.status(),
+    now,
+    timezone: config.timezone,
+    briefingTime: config.briefingTime,
   })
 
   const toolDeps = {
@@ -152,6 +182,8 @@ function build(): AppContainer {
   // Keep the day warm in the background, so "what's on today?" answers at
   // conversation speed and still answers when the network is down.
   day.startAutoSync()
+  scheduler.start()
+  proactive.start()
 
   return {
     config,
@@ -164,6 +196,8 @@ function build(): AppContainer {
     llm,
     stt,
     alarms,
+    scheduler,
+    proactive,
     day,
     agent,
     voice,

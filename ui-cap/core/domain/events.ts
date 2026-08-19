@@ -100,6 +100,15 @@ export interface DayEvent {
   overdueCount: number
 }
 
+/** An alarm started or stopped ringing. */
+export interface AlarmEvent {
+  type: 'alarm'
+  state: 'ringing' | 'stopped'
+  alarmId: string
+  label?: string
+  time?: string
+}
+
 /** A message worth surfacing on screen, and possibly out loud. */
 export interface NotificationEvent {
   type: 'notification'
@@ -125,6 +134,7 @@ export type AppEvent =
   | VoiceEvent
   | AgentEvent
   | DayEvent
+  | AlarmEvent
   | NotificationEvent
   | PingEvent
 
