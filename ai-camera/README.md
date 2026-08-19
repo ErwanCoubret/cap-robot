@@ -1,9 +1,10 @@
 # AI Camera IMX500
 
-The Sony IMX500 is a camera module with an AI accelerator inside the sensor
-itself. The neural network runs on the sensor die, so inference costs the
+The Sony IMX500 is a camera module with an AI accelerator inside the sensor itself. The neural network runs on the sensor die, so inference costs the
 Raspberry Pi almost no CPU: the Pi only reads the resulting tensors out of the
 frame metadata.
+
+https://docs.ultralytics.com/fr/integrations/sony-imx500
 
 This directory holds the face tracker that drives the robot's eyes:
 camera → face detection on the sensor → screen coordinates → ESP32 over serial.
