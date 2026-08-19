@@ -7,6 +7,7 @@
  * daemon socket or a second alarm ticker per hot reload would be a real bug.
  */
 
+import { VoiceInteractionService } from '../core/usecases/voice/voiceInteraction'
 import { LlmAdapter } from './ai/llmAdapter'
 import { resolveLlmProvider, resolveSttProvider } from './ai/providers'
 import { SttAdapter } from './ai/sttAdapter'
@@ -28,6 +29,7 @@ export interface AppContainer {
   flots: FlotsAdapter
   llm: LlmAdapter
   stt: SttAdapter
+  voice: VoiceInteractionService
 }
 
 const CONTAINER_KEY = Symbol.for('cap.container')
@@ -57,13 +59,22 @@ function build(): AppContainer {
   const llm = new LlmAdapter(resolveLlmProvider())
   const stt = new SttAdapter(resolveSttProvider())
 
+  const voice = new VoiceInteractionService({
+    hardware: capd,
+    stt,
+    flots,
+    publish: (event) => events.publish(event),
+    locale: config.locale,
+    timezone: config.timezone,
+  })
+
   console.info(
     `cap-ui starting capd=${config.capdUrl} flots=${config.flotsBaseUrl} data=${config.dataDir}`,
   )
   console.info(`cap-ui ${llm.describe()}`)
   console.info(`cap-ui ${stt.describe()}`)
 
-  return { config, events, capd, tokens, mcp, pairing, flots, llm, stt }
+  return { config, events, capd, tokens, mcp, pairing, flots, llm, stt, voice }
 }
 
 /** Return the process-wide container, building it on first use. */

@@ -55,6 +55,27 @@ export interface SpeakingEvent {
   kind?: 'speech' | 'sound'
 }
 
+/** Progress of a voice interaction, from the tap to the spoken answer. */
+export interface VoiceEvent {
+  type: 'voice'
+  interactionId: string
+  mode: 'note' | 'command'
+  state:
+    | 'recording'
+    | 'transcribing'
+    | 'saving'
+    | 'thinking'
+    | 'speaking'
+    | 'done'
+    | 'cancelled'
+    | 'error'
+  /** What the user said, once it has been transcribed. */
+  transcript?: string
+  /** What Cap is doing or answering, in words the user can read. */
+  message?: string
+  error?: string
+}
+
 /** Keep-alive so a proxy does not close an idle stream. */
 export interface PingEvent {
   type: 'ping'
@@ -68,6 +89,7 @@ export type AppEvent =
   | TrackingEvent
   | RecordingEvent
   | SpeakingEvent
+  | VoiceEvent
   | PingEvent
 
 /** Narrow an unknown payload coming off the wire into an {@link AppEvent}. */
