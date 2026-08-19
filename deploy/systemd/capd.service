@@ -1,0 +1,33 @@
+[Unit]
+Description=Cap robot hardware daemon (camera, eyes, microphone, speaker)
+Documentation=https://github.com/ErwanCoubret/cap-robot
+After=network.target sound.target
+
+[Service]
+Type=exec
+User=cap
+Group=cap
+WorkingDirectory=/home/cap/cap-robot/capd
+EnvironmentFile=/home/cap/cap-robot/.env
+
+# The venv is created with --system-site-packages so it can see picamera2,
+# which is installed from apt and is not reliably pip-installable.
+ExecStart=/home/cap/cap-robot/capd/.venv/bin/python -m capd
+
+Restart=on-failure
+RestartSec=3
+
+# The daemon owns the camera and the serial port; giving it a moment to
+# release them keeps the next start from finding them busy.
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+# Access to the eyes (serial), the camera and the sound devices.
+SupplementaryGroups=dialout video audio gpio
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=capd
+
+[Install]
+WantedBy=multi-user.target

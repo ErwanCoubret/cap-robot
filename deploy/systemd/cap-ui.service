@@ -1,0 +1,28 @@
+[Unit]
+Description=Cap robot interface and agent
+Documentation=https://github.com/ErwanCoubret/cap-robot
+After=network-online.target capd.service
+Wants=network-online.target
+# The interface works without the daemon (it says so on screen), so this is
+# ordering, not a hard requirement.
+After=capd.service
+
+[Service]
+Type=exec
+User=cap
+Group=cap
+WorkingDirectory=/home/cap/cap-robot/ui-cap
+EnvironmentFile=/home/cap/cap-robot/.env
+Environment=NODE_ENV=production
+
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start
+
+Restart=on-failure
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cap-ui
+
+[Install]
+WantedBy=multi-user.target

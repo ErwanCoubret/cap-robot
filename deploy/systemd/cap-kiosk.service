@@ -1,0 +1,30 @@
+[Unit]
+Description=Cap robot kiosk display
+Documentation=https://github.com/ErwanCoubret/cap-robot
+After=cap-ui.service graphical.target
+Wants=cap-ui.service
+
+[Service]
+Type=simple
+User=cap
+Group=cap
+WorkingDirectory=/home/cap/cap-robot
+
+# The X session the Pi's own desktop already runs on the 800x480 panel.
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/cap/.Xauthority
+EnvironmentFile=-/home/cap/cap-robot/.env
+
+ExecStart=/home/cap/cap-robot/deploy/kiosk/kiosk.sh
+
+# Chromium is the thing most likely to be closed by accident on a touch
+# screen; bringing it straight back is the whole point of a kiosk.
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cap-kiosk
+
+[Install]
+WantedBy=graphical.target

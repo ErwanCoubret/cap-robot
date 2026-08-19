@@ -6,6 +6,29 @@ Cap is the AI-powered assistant of [Flots app](https://flots.app). Its main purp
 
 The goal of this project is to give a physical form to Cap, allowing users to interact with it in a more natural and engaging way.
 
+## THE ROBOT'S SOFTWARE
+
+Cap listens, speaks, follows faces with its eyes, keeps its own alarms, and
+creates tasks and notes in Flots. It runs as three services:
+
+| Service | What it is |
+|---|---|
+| `capd` | Python daemon owning the camera, the eyes, the microphone and the speaker |
+| `cap-ui` | Next.js interface and agent, and the only client of the daemon |
+| `cap-kiosk` | Chromium full screen on the 800x480 panel |
+
+Install everything on the Pi with:
+
+```bash
+./deploy/install.sh
+```
+
+Then pair the robot with Flots from its own screen: **Réglages → Appairer**.
+
+Everything runs with no hardware attached as well, which is how it is
+developed — see [`docs/architecture.md`](docs/architecture.md) for the design,
+the daemon's API, and how to run it on a laptop.
+
 ## RASPBERRY PI SETUP
 
 From total scratch with a fresh Raspberry Pi OS light installation
